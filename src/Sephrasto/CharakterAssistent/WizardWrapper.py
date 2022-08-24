@@ -8,11 +8,13 @@ from EventBus import EventBus
 from CharakterAssistent.CharakterMerger import CharakterMerger
 from Hilfsmethoden import Hilfsmethoden
 
+
 class Regeln(object):
     def __init__(self):
         self.spezies = {}
         self.kulturen = {}
         self.professionen = {}
+
 
 class Element(object):
     def __init__(self, path, varPath, name, comboName):
@@ -21,10 +23,12 @@ class Element(object):
         self.name = name
         self.comboName = comboName
 
+
 class WizardWrapper(object):
     def __init__(self):
         self.regelList = {}
-        datadirs = [os.path.join("Data", "CharakterAssistent"), os.path.join(Wolke.Settings['Pfad-Plugins'], "CharakterAssistent")]
+        datadirs = [os.path.join("Data", "CharakterAssistent"),
+                    os.path.join(Wolke.Settings['Pfad-Plugins'], "CharakterAssistent")]
 
         for datadir in datadirs:
             if not os.path.isdir(datadir):
@@ -39,7 +43,8 @@ class WizardWrapper(object):
                 regeln = self.regelList[regelnName]
 
                 speziesFolder = os.path.join(datadir, regelnFolder, "Spezies")
-                regeln.spezies = {**regeln.spezies, **self.mapContainedFileNamesToPaths(speziesFolder)} #syntax = merge dict b into a
+                regeln.spezies = {**regeln.spezies,
+                                  **self.mapContainedFileNamesToPaths(speziesFolder)}  # syntax = merge dict b into a
 
                 kulturenFolder = os.path.join(datadir, regelnFolder, "Kultur")
                 regeln.kulturen = {**regeln.kulturen, **self.mapContainedFileNamesToPaths(kulturenFolder)}
@@ -52,9 +57,11 @@ class WizardWrapper(object):
                             kategorie = os.path.basename(professionKategorieFolder)
                             if not kategorie in regeln.professionen:
                                 regeln.professionen[kategorie] = {}
-                            regeln.professionen[kategorie] = {**regeln.professionen[kategorie], **self.mapContainedFileNamesToPaths(professionKategorieFolder)}
+                            regeln.professionen[kategorie] = {**regeln.professionen[kategorie],
+                                                              **self.mapContainedFileNamesToPaths(
+                                                                  professionKategorieFolder)}
 
-    def mapContainedFileNamesToPaths(self, folderPath, appendEP = True):
+    def mapContainedFileNamesToPaths(self, folderPath, appendEP=True):
         result = {}
         if os.path.isdir(folderPath):
             for path in Hilfsmethoden.listdir(folderPath):
@@ -74,7 +81,8 @@ class WizardWrapper(object):
 
                         if logging.root.level == logging.DEBUG:
                             logging.debug("CharakterAssistent: Verifiziere " + path)
-                            CharakterMerger.readChoices(path) # print log warnings for entire data folder on char creation
+                            CharakterMerger.readChoices(
+                                path)  # print log warnings for entire data folder on char creation
                     else:
                         elPath = path
                         if appendEP:
@@ -116,7 +124,8 @@ class WizardWrapper(object):
     def updateAcceptButton(self):
         self.ui.btnAccept.setEnabled(self.ui.cbSpezies.currentText() != "Überspringen" or
                                      self.ui.cbKultur.currentText() != "Überspringen" or
-                                     (self.ui.cbProfession.currentText() != "" and self.ui.cbProfession.currentText() != "Überspringen"))
+                                     (
+                                                 self.ui.cbProfession.currentText() != "" and self.ui.cbProfession.currentText() != "Überspringen"))
 
     def professionKategorieChanged(self):
         regeln = self.regelList[self.ui.cbRegeln.currentText()]
@@ -127,7 +136,7 @@ class WizardWrapper(object):
         self.ui.cbProfession.setEnabled(kategorie != "Überspringen")
         if kategorie != "Überspringen":
             self.ui.cbProfession.addItem("Überspringen")
-            self.professionen = sorted(list(regeln.professionen[kategorie].values()), key = lambda el: el.name)
+            self.professionen = sorted(list(regeln.professionen[kategorie].values()), key=lambda el: el.name)
             self.ui.cbProfession.addItems([el.comboName for el in self.professionen])
 
     def regelnChanged(self):
@@ -145,10 +154,10 @@ class WizardWrapper(object):
         self.ui.cbProfessionKategorie.blockSignals(False)
 
         self.ui.cbSpezies.addItem("Überspringen")
-        self.spezies = sorted(list(regeln.spezies.values()), key = lambda el: el.name)
+        self.spezies = sorted(list(regeln.spezies.values()), key=lambda el: el.name)
         self.ui.cbSpezies.addItems([el.comboName for el in self.spezies])
         self.ui.cbKultur.addItem("Überspringen")
-        self.kulturen = sorted(list(regeln.kulturen.values()), key = lambda el: el.name)
+        self.kulturen = sorted(list(regeln.kulturen.values()), key=lambda el: el.name)
         self.ui.cbKultur.addItems([el.comboName for el in self.kulturen])
 
         self.ui.cbProfessionKategorie.addItem("Überspringen")
@@ -176,34 +185,34 @@ class WizardWrapper(object):
 
         # First add selected SKP
         if self.ui.cbSpezies.currentText() != "Überspringen":
-            spezies = self.spezies[self.ui.cbSpezies.currentIndex()-1]
+            spezies = self.spezies[self.ui.cbSpezies.currentIndex() - 1]
             CharakterMerger.xmlLesen(spezies.path, True, False)
 
         if self.ui.cbKultur.currentText() != "Überspringen":
-            kultur = self.kulturen[self.ui.cbKultur.currentIndex()-1]
+            kultur = self.kulturen[self.ui.cbKultur.currentIndex() - 1]
             CharakterMerger.xmlLesen(kultur.path, False, True)
 
         if self.ui.cbProfessionKategorie.currentText() != "Überspringen":
             professionKategorie = regeln.professionen[self.ui.cbProfessionKategorie.currentText()]
 
             if self.ui.cbProfession.currentText() != "Überspringen":
-                profession = self.professionen[self.ui.cbProfession.currentIndex()-1]
+                profession = self.professionen[self.ui.cbProfession.currentIndex() - 1]
                 CharakterMerger.xmlLesen(profession.path, False, False)
 
         # Handle choices afterwards so EP spent can be displayed accurately
         if self.ui.cbSpezies.currentText() != "Überspringen":
-            spezies = self.spezies[self.ui.cbSpezies.currentIndex()-1]
+            spezies = self.spezies[self.ui.cbSpezies.currentIndex() - 1]
             CharakterMerger.handleChoices(spezies, geschlecht, True, False, False)
 
         if self.ui.cbKultur.currentText() != "Überspringen":
-            kultur = self.kulturen[self.ui.cbKultur.currentIndex()-1]
+            kultur = self.kulturen[self.ui.cbKultur.currentIndex() - 1]
             CharakterMerger.handleChoices(kultur, geschlecht, False, True, False)
 
         if self.ui.cbProfessionKategorie.currentText() != "Überspringen":
             professionKategorie = regeln.professionen[self.ui.cbProfessionKategorie.currentText()]
 
             if self.ui.cbProfession.currentText() != "Überspringen":
-                profession = self.professionen[self.ui.cbProfession.currentIndex()-1]
+                profession = self.professionen[self.ui.cbProfession.currentIndex() - 1]
                 CharakterMerger.handleChoices(profession, geschlecht, False, False, True)
 
         Wolke.Char.aktualisieren()

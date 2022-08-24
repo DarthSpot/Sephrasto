@@ -4,6 +4,7 @@ Created on Fri Apr 20 20:09:52 2018
 
 @author: Aeolitus
 """
+
 from Wolke import Wolke
 from Wolke import CharakterbogenInfo
 import UI.Einstellungen
@@ -13,11 +14,11 @@ import yaml
 import logging
 import sys
 import platform
-import appdirs
+import PathHelper
 from Hilfsmethoden import Hilfsmethoden
 from PluginLoader import PluginLoader
 
-class EinstellungenWrapper():    
+class EinstellungenWrapper():
     def __init__(self, plugins):
         super().__init__()
 
@@ -48,7 +49,7 @@ class EinstellungenWrapper():
         self.ui.checkWizard.setChecked(Wolke.Settings['Charakter-Assistent'])
         self.ui.comboFontSize.setCurrentIndex(Wolke.Settings['Cheatsheet-Fontsize'])
 
-        self.settingsFolder = EinstellungenWrapper.getSettingsFolder()
+        self.settingsFolder = PathHelper.getSettingsFolder()
         self.ui.editChar.setText(Wolke.Settings['Pfad-Chars'])
         self.ui.editRegeln.setText(Wolke.Settings['Pfad-Regeln'])
         self.ui.editPlugins.setText(Wolke.Settings['Pfad-Plugins'])
@@ -213,20 +214,9 @@ class EinstellungenWrapper():
             os.execl(sys.executable, sys.argv[0], *sys.argv)
 
     @staticmethod
-    def getSettingsFolder():
-        return appdirs.user_config_dir(appname='Sephrasto', appauthor='Ilaris')
-
-    @staticmethod
-    def getDefaultUserFolder():
-        return os.path.join(os.path.expanduser('~'), 'Sephrasto')
-
-    @staticmethod
     def createFolder(basePath):
         if not os.path.isdir(basePath):
-            try:
-                # makedirs in case parent folder does not exist
-                os.makedirs(basePath)
-            except:
+            if not PathHelper.createFolder(basePath):
                 messagebox = QtWidgets.QMessageBox()
                 messagebox.setWindowTitle("Fehler!")
                 messagebox.setText(
@@ -246,8 +236,8 @@ class EinstellungenWrapper():
 
     @staticmethod
     def load():
-        settingsFolder = EinstellungenWrapper.getSettingsFolder()
-        userFolder = EinstellungenWrapper.getDefaultUserFolder()
+        settingsFolder = PathHelper.getSettingsFolder()
+        userFolder = PathHelper.getDefaultUserFolder()
         EinstellungenWrapper.createFolder(settingsFolder)
         EinstellungenWrapper.createUserFolders(userFolder)
         settingsPath = os.path.join(settingsFolder, 'Sephrasto.ini')
@@ -312,7 +302,7 @@ class EinstellungenWrapper():
 
     @staticmethod
     def save():
-        settingsFolder = EinstellungenWrapper.getSettingsFolder()
+        settingsFolder = PathHelper.getSettingsFolder()
         EinstellungenWrapper.createFolder(settingsFolder)
 
         settingsPath = os.path.join(settingsFolder, 'Sephrasto.ini')

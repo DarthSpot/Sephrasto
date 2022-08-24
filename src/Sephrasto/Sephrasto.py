@@ -18,6 +18,7 @@ import UI.DatenbankMain
 from Wolke import Wolke
 import yaml
 from EinstellungenWrapper import EinstellungenWrapper
+import PathHelper
 from HilfeWrapper import HilfeWrapper
 import Version
 from EventBus import EventBus
@@ -369,45 +370,6 @@ class MainWindowWrapper(object):
             Wolke.HeadingColor = "#4A000B"
             Wolke.BorderColor = "rgba(0,0,0,0.2)"
             self.buildStylesheet("#e4d0a5", "#e8c5a9", "#d1bd94")
-        elif style == "Loirana":
-            self.app.setStyle('fusion')
-
-            palette = QPalette()
-            colors = {
-                "box" : QColor("#ffb86c"),
-                "bg": QColor("#282a36"),
-                "heading" : QColor("#bd93f9"),
-                "text": QColor("#f8f8f2"),
-                "table": QColor("#6272a4"),
-                "bg_bestiarium" : QColor("#44475a"),
-                "bg_dark" : QColor("#44475a"),
-                "text_dark": QColor("#ff5555")
-            }
-
-            palette.setColor(QPalette.Window, colors["bg"])
-            palette.setColor(QPalette.WindowText, colors["text"])
-            palette.setColor(QPalette.Base, colors["bg"])
-            palette.setColor(QPalette.AlternateBase, colors["table"])
-            palette.setColor(QPalette.ToolTipBase, colors["bg"])
-            palette.setColor(QPalette.ToolTipText, colors["text"])
-            palette.setColor(QPalette.Text, colors["text"])
-            palette.setColor(QPalette.Button, colors["bg_dark"])
-            palette.setColor(QPalette.ButtonText, colors["text"])
-            palette.setColor(QPalette.BrightText, colors["text"])
-            palette.setColor(QPalette.Link, colors["heading"])
-            palette.setColor(QPalette.Highlight, colors["box"])
-            palette.setColor(QPalette.HighlightedText, colors["text"])
-            #palette.setColor(QPalette.Active, QPalette.Button, colors["box"])
-            palette.setColor(QPalette.Disabled, QPalette.ButtonText, colors["text_dark"])
-            palette.setColor(QPalette.Disabled, QPalette.WindowText, colors["text_dark"])
-            palette.setColor(QPalette.Disabled, QPalette.Text, colors["text_dark"])
-            palette.setColor(QPalette.Disabled, QPalette.HighlightedText, colors["text_dark"])
-            palette.setColor(QPalette.Disabled, QPalette.Base, colors["bg_dark"])
-            self.app.setPalette(palette)
-            QToolTip.setPalette(palette)
-            Wolke.HeadingColor = "#bd93f9"
-            Wolke.BorderColor = "rgba(0,0,0,0.2)"
-            self.buildStylesheet("#44475a", Wolke.HeadingColor, "#44475a")
         elif style == "DSA Forum":
             self.app.setStyle('fusion')
             palette = QPalette()
@@ -445,6 +407,36 @@ class MainWindowWrapper(object):
             Wolke.HeadingColor = "#000000"
             Wolke.BorderColor = "rgba(0,0,0,0.2)"
             self.buildStylesheet("#dcc484", "#f6efe2")
+        else:
+            try:
+                for pal in PathHelper.getThemes():
+                    self.app.setStyle('fusion')
+                    palette = QPalette()
+
+                    if 'name' in pal and pal['name'] == style:
+                        for elem, col in pal["palette"]:
+                            palette.setColor(elem, QColor(col))
+
+                        if 'active' in pal:
+                            for elem, col in pal["active"]:
+                                palette.setColor(QPalette.Active, elem, QColor(col))
+
+                        if 'disabled' in pal:
+                            for elem, col in pal["disabled"]:
+                                palette.setColor(QPalette.Disabled, elem, QColor(col))
+
+                        self.app.setPalette(palette)
+                        QToolTip.setPalette(palette)
+                        Wolke.HeadingColor = pal["heading"]
+                        Wolke.BorderColor = pal["border"]
+                        self.buildStylesheet(pal["sheet"]["readonly"], pal["sheet"]["panel"], pal["sheet"]["button"])
+                        break
+            except:
+                pass
+
+
+
+
         
 if __name__ == "__main__":
     itm = MainWindowWrapper()

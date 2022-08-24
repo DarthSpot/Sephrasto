@@ -10,7 +10,6 @@
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
-
 class Ui_SettingsWindow(object):
     def setupUi(self, SettingsWindow):
         SettingsWindow.setObjectName("SettingsWindow")
@@ -172,11 +171,6 @@ class Ui_SettingsWindow(object):
         self.comboTheme = QtWidgets.QComboBox(self.groupBox_4)
         self.comboTheme.setMinimumSize(QtCore.QSize(240, 0))
         self.comboTheme.setObjectName("comboTheme")
-        self.comboTheme.addItem("")
-        self.comboTheme.addItem("")
-        self.comboTheme.addItem("")
-        self.comboTheme.addItem("")
-        self.comboTheme.addItem("")
         self.gridLayout_2.addWidget(self.comboTheme, 0, 2, 1, 1)
         self.label_12 = QtWidgets.QLabel(self.groupBox_4)
         self.label_12.setObjectName("label_12")
@@ -237,11 +231,6 @@ class Ui_SettingsWindow(object):
         self.comboTheme = QtWidgets.QComboBox(self.groupBox_4)
         self.comboTheme.setMinimumSize(QtCore.QSize(240, 0))
         self.comboTheme.setObjectName("comboTheme")
-        self.comboTheme.addItem("")
-        self.comboTheme.addItem("")
-        self.comboTheme.addItem("")
-        self.comboTheme.addItem("")
-        self.comboTheme.addItem("")
         self.horizontalLayout_2.addWidget(self.comboTheme)
         self.resetFontOS = QtWidgets.QPushButton(self.groupBox_4)
         self.resetFontOS.setMinimumSize(QtCore.QSize(28, 28))
@@ -346,12 +335,15 @@ class Ui_SettingsWindow(object):
         self.label_8.setText(_translate("SettingsWindow", "Theme:"))
         self.label_11.setText(_translate("SettingsWindow", "Schriftart Überschriften:"))
         self.label_10.setText(_translate("SettingsWindow", "Schriftgröße:"))
-        self.comboTheme.setItemText(0, _translate("SettingsWindow", "Ilaris"))
-        self.comboTheme.setItemText(1, _translate("SettingsWindow", "DSA Forum"))
-        self.comboTheme.setItemText(2, _translate("SettingsWindow", "Fusion Light"))
-        self.comboTheme.setItemText(3, _translate("SettingsWindow", "Loirana"))
-        self.comboTheme.setItemText(4, _translate("SettingsWindow", "Fusion Dark"))
-        self.comboTheme.setItemText(5, _translate("SettingsWindow", "Windows Vista"))
+        self.comboTheme.addItem(_translate("SettingsWindow", "Ilaris"))
+        self.comboTheme.addItem(_translate("SettingsWindow", "DSA Forum"))
+        self.comboTheme.addItem(_translate("SettingsWindow", "Fusion Light"))
+        self.comboTheme.addItem(_translate("SettingsWindow", "Fusion Dark"))
+        self.comboTheme.addItem(_translate("SettingsWindow", "Windows Vista"))
+        from Sephrasto import PathHelper
+        for theme in PathHelper.getThemes():
+            self.comboTheme.addItem(_translate("SettingsWindow", theme["name"]))
+
         self.resetFontOS.setToolTip(_translate("SettingsWindow", "Darstellungsoptionen auf Betriebssystemstandard zurücksetzen"))
         self.resetFontOS.setText(_translate("SettingsWindow", "OS"))
         self.resetFontOS.setProperty("class", _translate("SettingsWindow", "icon"))
