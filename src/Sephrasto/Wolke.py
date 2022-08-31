@@ -47,7 +47,7 @@ class Wolke:
         'UpdateCheck_DisableFor' : '',
         'Theme' : "Ilaris",
         'Font' : "Crimson Pro",
-        'FontSize' : 9,
+        'FontSize' : 0, # we default this to os font size after start
         'FontHeading' : "Aniron",
         'FontHeadingSize' : 8,
         'DPI-Skalierung' : False,
@@ -79,3 +79,4 @@ class Wolke:
     PanelColor = "#b3b3b3"
     DefaultOSFont = ""
     DefaultOSFontSize = 9
+    FontAwesomeCSS = "" # Qt does not support 'class' in span tags (yet), so we store the style here for reuse in the app
