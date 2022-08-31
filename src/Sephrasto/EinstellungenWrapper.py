@@ -314,7 +314,7 @@ class EinstellungenWrapper():
     @staticmethod
     def save():
         settingsFolder = EinstellungenWrapper.createSettingsFolder()
-        settingsPath = os.path.join(settingsFolder, 'Sephrasto.ini')
+        settingsPath = os.path.normpath(os.path.join(settingsFolder, 'Sephrasto.ini'))
         with open(settingsPath, 'w') as outfile:
             yaml.dump(Wolke.Settings, outfile)
 

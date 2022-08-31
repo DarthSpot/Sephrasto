@@ -4,7 +4,7 @@ import unicodedata
 from PyQt6.QtCore import QStandardPaths
 
 def getSettingsFolder():
-    return os.path.join(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.ConfigLocation), 'Sephrasto')
+    return os.path.join(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.GenericConfigLocation), 'Sephrasto')
 
 def getDefaultUserFolder():
     userFolder = os.path.expanduser('~')
