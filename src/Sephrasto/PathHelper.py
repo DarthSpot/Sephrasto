@@ -1,10 +1,10 @@
 import os
 import platform
 import unicodedata
-from PyQt5.QtCore import QStandardPaths
+from PyQt6.QtCore import QStandardPaths
 
 def getSettingsFolder():
-    return os.path.join(QStandardPaths.writableLocation(QStandardPaths.ConfigLocation), 'Sephrasto')
+    return os.path.join(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.ConfigLocation), 'Sephrasto')
 
 def getDefaultUserFolder():
     userFolder = os.path.expanduser('~')
