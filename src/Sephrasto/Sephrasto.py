@@ -96,7 +96,7 @@ class MainWindowWrapper(object):
             os.chdir(os.path.dirname(sys.argv[0]))
 
         # Get the Settings loaded
-        EinstellungenWrapper.load()
+        EinstellungenWrapper.loadPreQt()
         logging.getLogger().setLevel(loglevels[Wolke.Settings['Logging']])
 
         os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "1" if Wolke.Settings['DPI-Skalierung'] else "0"
@@ -105,6 +105,7 @@ class MainWindowWrapper(object):
         if self.app is None:
             self.app = QtWidgets.QApplication(sys.argv)
 
+        EinstellungenWrapper.loadPostQt()
         # Font hinting adjusts font outlines for lining up with the raster grid. This was apparently important for low res which nobody has anymore today.
         # In my tests it made stuff look worse, especially the fontawesome icons, so we are disabling it
         font = self.app.font()
@@ -117,6 +118,9 @@ class MainWindowWrapper(object):
         fontSize = defaultFont.pointSize()
         if fontSize != -1:
             Wolke.DefaultOSFontSize = fontSize
+            if Wolke.Settings['FontSize'] == 0:
+                Wolke.Settings['FontSize'] = Wolke.DefaultOSFontSize
+                Wolke.Settings['FontHeadingSize'] = Wolke.DefaultOSFontSize -1
 
         self.form = QtWidgets.QWidget()
         self.ui = UI.MainWindow.Ui_Form()
@@ -324,6 +328,7 @@ class MainWindowWrapper(object):
         # Create stylesheet
         standardFont = f"font-family: '{Wolke.Settings['Font']}'"
         headingFont = f"font-family: '{Wolke.Settings['FontHeading']}'; color: {Wolke.HeadingColor}"
+        Wolke.FontAwesomeCSS = f"font-size: {min(Wolke.Settings['FontSize'], 12)}pt; font-family: \"Font Awesome 6 Free Solid\"; font-weight: 900;"
         css = f"""*[readOnly=\"true\"] {{ background-color: {Wolke.ReadonlyColor}; border: none; }}
 QWidget, QToolTip {{ {standardFont}; font-size: {Wolke.Settings['FontSize']}pt; }}
 QHeaderView::section {{ font-weight: bold; font-size: {Wolke.Settings['FontHeadingSize']-1}pt; {headingFont}; }}
