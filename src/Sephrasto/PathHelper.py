@@ -1,7 +1,7 @@
 import os
 import platform
 import unicodedata
-from PyQt6.QtCore import QStandardPaths
+from PySide6.QtCore import QStandardPaths
 
 def getSettingsFolder():
     return os.path.join(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.GenericConfigLocation), 'Sephrasto')
