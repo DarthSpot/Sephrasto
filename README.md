@@ -2,25 +2,30 @@
 Ein Charaktergenerator für das DSA-Hausregelsystem Ilaris, erstellt von Aeolitus. So vollständig wie möglich. Eine Gebrauchsanweisung findest du, wenn du im Hauptfenster auf den Hilfe-Button clickst.
 
 ## Features
-* Automatisches Befüllen des Ilaris Charakterbogens (Benötigt pdftk : Gratis-Download für Windows @ https://www.pdflabs.com/tools/pdftk-server/, Linux-Installation siehe unten)
+* Automatisches Befüllen des Ilaris Charakterbogens (Benötigt pdftk : Gratis-Download für Windows @ https://www.pdflabs.com/tools/pdftk-server/, Mac- und Linux-Installation siehe unten)
 * Einfaches Einarbeiten von Hausregeln wie neuen Fertigkeiten, Vorteilen etc. durch frei editierbare Regelbasis
 * Fast alle relevanten Regeln sind im Tool enthalten
 
 Bei Fragen / Änderungswünschen / Feedback einfach Bescheid sagen - im dsaforum oder hier!
 
-## Dieses Tool verwendet
-
-Um Sephrasto mit Python zu verwenden, wird mindestens Version 3.6 benötigt, Version 3.7+ wird aber empfohlen. 
-
-### Pakete
+## Verwendete Pakete und Programme
+* Um Sephrasto mit Python zu verwenden, wird mindestens Version 3.6 benötigt, Version 3.7+ wird aber empfohlen. 
 * PySide6 (https://www.qt.io/qt-for-python) für die Grafische Oberfläche
 * lxml (http://lxml.de/) als xml-parser (unter Linux: `libxml2-dev` und `libxmlsec1-dev` global installieren, wenn lxml via pip installiert werden soll)
 * PyYAML (https://pyyaml.org/) als yaml-parser
-* requests (https://github.com/psf/requests) für den update checker
+* requests (https://github.com/psf/requests) für den update checker. Dieses Paket ist abhängig von:
+    * charset-normalizer (https://github.com/Ousret/charset_normalizer)
+    * certifi (https://github.com/certifi/python-certifi)
+    * idna (https://github.com/kjd/idna)
+    * urllib3 (https://urllib3.readthedocs.io)
+* cx_freeze (optional, https://github.com/marcelotduarte/cx_Freeze) um Sephrasto-Builds zu erstellen
 
-### Integriert
-* fdfgen (https://github.com/ccnmtl/fdfgen) zum Editieren des Charakterbogens 
-* pdffields (https://github.com/evfredericksen/pdffields) für einfachere Bedienung von fdfgen ;)
+Mitgeliefert werden außerdem:
+* fdfgen (https://github.com/ccnmtl/fdfgen) zum Editieren des Charakterbogens
+* convert (nur Windows, https://imagemagick.org) zum Einfügen des Charakterbilds in den Charakterbogen
+* cpdf (https://www.coherentpdf.com) zur Reduzierung der Dateigröße des Charakterbogens
+
+Die zugehörigen Lizenzen können hier gefunden werden: [Acknowledgements](src/Sephrasto/Doc/Acknowledgements.md)
 
 ## Installation Linux (Ubuntu/Debian)
 ```
@@ -64,7 +69,7 @@ hinzu. Deine Versionsnummer musst du selbst eintragen. Getestet wurde bisher nur
 
 Gestartet wird Sephrasto dann folgendermaßen:
 * Doppelclick auf Sephrasto.py (natürlich kannst du auch ein Alias erstellen)
-* Gegebenenfalls musst du über System Preferences -> Security & Privacy noch die Ausführung erlauben
+* Beim ersten Start musst du über System Preferences -> Security & Privacy noch die Ausführung erlauben. Beim ersten PDF-Export das gleiche für cpdf.
 * Optional kannst du im Python Launcher noch "Run in a Terminal window" deaktivieren, um das zusätzliche Terminalfenster loszuwerden
 
 ### Charakterbild ###
@@ -76,9 +81,7 @@ Für Sephrastos Charakterbildfeature wird imagemagick benötigt, das leider in d
 * Öffne Sephrasto.sln
 * Installiere die dependencies: Solution Explorer -> Python Environments -> Rechtsclick auf Python 3.x -> Install Python Package.
 * Stelle zuerst sicher, dass deine pip Version aktuell ist, aktualisiere diese gegebenenfalls und starte Visual Studio neu
-* Installiere nun die oben genannten Pakete im gleichen Menu. Um mit build.bat einen Build erstellen zu können wird zusätzlich folgendes benötigt:
-    * cx_freeze (https://github.com/marcelotduarte/cx_Freeze)
-    * pywin32 (https://github.com/mhammond/pywin32)
+* Installiere nun die oben genannten Pakete im gleichen Menu.
 * Erstelle die IntelliSense Datenbank: Solution Explorer -> Rechtsclick auf Python Environments -> View all Python environments -> IntelliSense im Dropdown auswahlen und aktivieren/refreshen
 * Stelle das Tab-Verhalten auf "Insert Spaces": Tools -> Options -> Text Editor -> Python -> Tabs
 * Öffne das Exception Settings Fenster (Debug -> Windows -> Exception Settings) und selektiere alle Python Exceptions, dann deaktiviere <All Python Exceptions not in this list>, BaseException und Exception - damit breaken die custom exceptions nicht, die Sephrasto intern nutzt.

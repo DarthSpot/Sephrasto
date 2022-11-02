@@ -47,8 +47,12 @@ class CharakterPrintUtility:
 
     @staticmethod
     def getFreieFertigkeiten(char):
+        return CharakterPrintUtility.getFreieFertigkeitenNames(char.freieFertigkeiten)
+
+    @staticmethod
+    def getFreieFertigkeitenNames(freieFertigkeiten):
         ferts = []
-        for el in char.freieFertigkeiten:
+        for el in freieFertigkeiten:
             if el.wert < 1 or el.wert > 3:
                 continue
             name = el.name
@@ -64,7 +68,7 @@ class CharakterPrintUtility:
         return sorted(char.fertigkeiten, key = lambda x: (Wolke.DB.fertigkeiten[x].printclass, x))
 
     @staticmethod
-    def getTalente(char, fertigkeit):
+    def getTalente(char, fertigkeit, nurHöchsteFertigkeit = False):
         talentBoxes = []
         talente = fertigkeit.gekaufteTalente.copy()
         talente.extend([t for t in fertigkeit.talentMods if not t in talente])
@@ -72,6 +76,18 @@ class CharakterPrintUtility:
 
         for el in talente:
             talent = Wolke.DB.talente[el]
+
+            if nurHöchsteFertigkeit:
+                höchste = None
+                for fert in talent.fertigkeiten:
+                    ferts = char.übernatürlicheFertigkeiten if talent.isSpezialTalent() else char.fertigkeiten
+                    if fert not in ferts:
+                        continue
+                    if höchste == None or höchste.probenwertTalent < ferts[fert].probenwertTalent:
+                        höchste = ferts[fert]
+                if höchste.name != fertigkeit.name:
+                    continue
+
             tt = Talentbox.Talentbox()
             tt.na = el
             tt.pw = fertigkeit.probenwertTalent
@@ -221,7 +237,7 @@ class CharakterPrintUtility:
         return result.strip()
 
     @staticmethod
-    def __mergeDescriptions(str1, str2):
+    def mergeDescriptions(str1, str2):
         #match numbers or fractions, + is ignored, nums with prefix S. are skipped
         reNumbers = re.compile(r'-?\d+/\d+|-?\d+', re.UNICODE)
 
@@ -352,18 +368,19 @@ class CharakterPrintUtility:
         else:
             beschreibung = vorteil.text.replace("\n\n", "\n")
 
+        beschreibungenErsetzen = [int(typ) for typ in Wolke.DB.einstellungen["Regelanhang: Vorteilsbeschreibungen ersetzen"].toTextList()]
         for vor2 in char.vorteile:
             vorteil2 = Wolke.DB.vorteile[vor2]
             if CharakterPrintUtility.isLinkedTo(char, vorteil2, VorteilLinkKategorie.Vorteil, vorteil.name):
                 beschreibung2 = CharakterPrintUtility.getLinkedDescription(char, vorteil2)
 
-                if vorteil2.typ == 0:
+                if vorteil2.typ in beschreibungenErsetzen:
                     #allgemeine vorteile replace the description of what they link to (except vorteil is variable with a comment)
                     if not (vorteil.name in char.vorteileVariable) or not char.vorteileVariable[vorteil.name].kommentar:
                         beschreibung = beschreibung2
                     else:
                         beschreibung += "\n" + beschreibung2
                 else:
-                    beschreibung = CharakterPrintUtility.__mergeDescriptions(beschreibung, beschreibung2)
+                    beschreibung = CharakterPrintUtility.mergeDescriptions(beschreibung, beschreibung2)
 
         return beschreibung

@@ -1,17 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-This file consists of the following merged together into one file for usability
-
-    # FIRST #
-Port of the PHP forge_fdf library by Sid Steward
-(http://www.pdfhacks.com/forge_fdf/)
-
+This file contains code from the fdfgen repository (https://github.com/ccnmtl/fdfgen),
+which is a port of the PHP forge_fdf library by Sid Steward (http://www.pdfhacks.com/forge_fdf/)
 Anders Pearson <anders@columbia.edu> at Columbia Center For New Media Teaching
 and Learning <http://ccnmtl.columbia.edu/>
-
-    # SECOND # 
-PDFFields - found at:
-    https://github.com/evfredericksen/pdffields
 """
 
 import codecs
@@ -28,43 +20,23 @@ import tempfile
 from re import match
 from tempfile import NamedTemporaryFile
 import subprocess
+import logging
 
 def check_output_silent(call):
-    if platform.system() == 'Windows':
-        startupinfo = subprocess.STARTUPINFO()
-        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        return subprocess.check_output(call, startupinfo=startupinfo)
-    else:
-        #TODO
-        return subprocess.check_output(call)
-
-def get_fields(pdf_file):
-    '''
-    Use pdftk to get a pdf's fields as a string, parse the string
-    and return the fields as a dictionary, with field names as keys
-    and field values as values.
-    '''
-    fields = {}
-    call = ['pdftk', pdf_file, 'dump_data_fields_utf8']
     try:
-        data_string = check_output_silent(call).decode('utf8')
-    except FileNotFoundError:
-        raise PdftkNotInstalledError('Could not locate PDFtk installation')
-    data_list = data_string.split('\r\n')
-    if len(data_list) == 1:
-        data_list = data_string.split('\n')
-    for line in data_list:
-        if line:
-            re_object = match(r'(\w+): (.+)', line)
-            if re_object is not None:
-                if re_object.group(1) == 'FieldName':
-                    key = re_object.group(2)
-                    fields[key] = ''
-                elif re_object.group(1) == 'FieldValue':
-                    fields[key] = re_object.group(2)
-    return fields
+        if platform.system() == 'Windows':
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            return subprocess.check_output(call, startupinfo=startupinfo, stderr=subprocess.STDOUT)
+        else:
+            return subprocess.check_output(call, stderr=subprocess.STDOUT)
+    except subprocess.CalledProcessError as error:
+        processError = error.output.decode('utf-8')
+        if "Failed to open" in processError:
+            processError = "Vermutlich hat ein anderes Programm ein Überschreiben der Datei verhindert. Bitte schließe alle Programme, in denen die Datei geöffnet ist."
+        raise Exception(processError)
 
-def write_pdf(source, fields, output, flatten=False):
+def write_pdf(source, fields, out_file = None, flatten=False):
     '''
     Take a source file path, list or dictionary of fdf fields, and
     output path, and create a filled-out pdf.
@@ -72,19 +44,20 @@ def write_pdf(source, fields, output, flatten=False):
     fdf = forge_fdf(fdf_data_strings=fields)
     with NamedTemporaryFile(delete=False) as file:
         file.write(fdf)
-    call = ['pdftk', source, 'fill_form', file.name, 'output', output]
-    call.append('need_appearances')
+
+    if not out_file:
+        handle, out_file = tempfile.mkstemp()
+        os.close(handle)
+
+    call = ['pdftk', source, 'fill_form', file.name, 'output', out_file]
     if flatten:
         call.append('flatten')
-    try:
-        check_output_silent(call)
-    except FileNotFoundError:
-        raise PdftkNotInstalledError('Could not locate PDFtk installation')
-    remove(file.name)
+    else:
+        call.append('need_appearances')
     
-class PdftkNotInstalledError(Exception):
-    pass
-
+    check_output_silent(call)
+    remove(file.name)
+    return out_file
 
 def smart_encode_str(s):
     """Create a UTF-16 encoded PDF string literal for `s`."""
@@ -277,6 +250,93 @@ def concat(files, out_file=None):
         raise
     return out_file
 
-def shrink(file, fromPageNumber, toPageNumber, out_file):
+def shrink(file, fromPageNumber, toPageNumber, out_file = None):
+    if not out_file:
+        handle, out_file = tempfile.mkstemp()
+        os.close(handle)
     call = ['pdftk', file, 'cat', str(fromPageNumber) + "-" + str(toPageNumber), 'output', out_file]
     check_output_silent(call)
+    return out_file
+
+def squeeze(file, out_file = None):
+    if not out_file:
+        handle, out_file = tempfile.mkstemp()
+        os.close(handle)
+
+    cpdfPath = os.path.join("Bin", platform.system(), "cpdf", "cpdf")
+    call = [cpdfPath, "-squeeze", file, "-o", out_file]
+
+    try:
+        check_output_silent(call)
+    except Exception as e:
+        logging.error("Unable to squeeze pdf: " + str(e))
+
+    return out_file
+
+def addBackground(file, background_file, out_file = None):
+    if not out_file:
+        handle, out_file = tempfile.mkstemp()
+        os.close(handle)
+    call = ['pdftk', file, 'background', background_file, 'output', out_file, 'need_appearances']
+    check_output_silent(call)
+    return out_file
+
+def split(file, pagerange, out_file = None):
+    if not out_file:
+        handle, out_file = tempfile.mkstemp()
+        os.close(handle)
+    call = ['pdftk', file, "cat", pagerange, "output", out_file]
+    check_output_silent(call)
+    return out_file
+
+def stamp(file, stamp_file, out_file = None):
+    if not out_file:
+        handle, out_file = tempfile.mkstemp()
+        os.close(handle)
+    call = ['pdftk', file, 'stamp', stamp_file, 'output', out_file, 'need_appearances']
+    check_output_silent(call)
+    return out_file
+
+def multistamp(file, stamp_file, out_file = None):
+    if not out_file:
+        handle, out_file = tempfile.mkstemp()
+        os.close(handle)
+    call = ['pdftk', file, 'multistamp', stamp_file, 'output', out_file, 'need_appearances']
+    check_output_silent(call)
+    return out_file
+
+def createEmptyPage(pageSize = "A4", out_file = None):
+    if not out_file:
+        handle, out_file = tempfile.mkstemp()
+        os.close(handle)
+        os.remove(out_file) # just using it to get a path
+        out_file += ".pdf"
+
+    convertPath = "convert"
+    if platform.system() == 'Windows':
+        convertPath = os.path.join("Bin", platform.system(), "ImageMagick", "convert")
+
+    call = [convertPath, "xc:none", "-page", pageSize, out_file]
+    check_output_silent(call)
+    return out_file
+
+def convertImageToPDF(file, targetSize, pageSize, offset, out_file = None):
+    if not out_file:
+        handle, out_file = tempfile.mkstemp()
+        os.close(handle)
+        os.remove(out_file) # just using it to get a path
+        out_file += ".pdf"
+
+    convertPath = "convert"
+    if platform.system() == 'Windows':
+        convertPath = os.path.join("Bin", platform.system(), "ImageMagick", "convert")
+
+    targetSize = f"{targetSize[0]}x{targetSize[1]}"
+
+    pageSize += ("+" if offset[0] >= 0 else "") + str(offset[0])
+    pageSize += ("+" if offset[1] >= 0 else "") + str(offset[1])
+
+    call = [convertPath, file, "-resize", targetSize, "-gravity", "Center", "-extent", targetSize, "-density", "96",
+            "-page", pageSize, out_file]
+    check_output_silent(call)
+    return out_file

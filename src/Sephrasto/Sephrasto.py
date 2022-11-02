@@ -28,7 +28,6 @@ from PySide6.QtGui import QPalette, QColor
 from PySide6.QtWidgets import QToolTip
 from Hilfsmethoden import Hilfsmethoden
 import platform
-
 import PathHelper
 
 loglevels = {0: logging.ERROR, 1: logging.WARNING, 2: logging.DEBUG}
@@ -50,11 +49,11 @@ def sephrasto_excepthook(exc_type, exc_value, tb):
         tb = tb.tb_next
 
     # Exception type and value
-    exception = ' %s: %s' %(exc_type.__name__, exc_value)
+    exception = '%s: %s' %(exc_type.__name__, exc_value)
     logging.critical(exception + "\n".join(traceback))
 
     #Try to show message box, hopefully its not a crash in Qt
-    text = "Unerwarteter Fehler:" + exception + ". Bei Fragen zum diesem Fehler bitte sephrasto.log mitsenden."
+    text = exception + "\nBei Fragen zum diesem Fehler bitte sephrasto.log aus dem Installationsordner mitsenden."
     if Wolke.Settings['Pfad-Plugins'] in filename:
         splitPath = os.path.split(os.path.relpath(filename, Wolke.Settings['Pfad-Plugins']))
         if len(splitPath) > 0:
