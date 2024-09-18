@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'DatenbankEditEinstellung.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.4.2
+## Created by: Qt User Interface Compiler version 6.7.2
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -15,112 +15,105 @@ from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
     QFont, QFontDatabase, QGradient, QIcon,
     QImage, QKeySequence, QLinearGradient, QPainter,
     QPalette, QPixmap, QRadialGradient, QTransform)
-from PySide6.QtWidgets import (QAbstractButton, QApplication, QCheckBox, QDialog,
-    QDialogButtonBox, QDoubleSpinBox, QGridLayout, QLabel,
-    QPlainTextEdit, QSizePolicy, QSpacerItem, QSpinBox,
-    QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QCheckBox, QDoubleSpinBox,
+    QFormLayout, QLabel, QPlainTextEdit, QScrollArea,
+    QSizePolicy, QSpacerItem, QSpinBox, QVBoxLayout,
+    QWidget)
 
-class Ui_deDialog(object):
-    def setupUi(self, deDialog):
-        if not deDialog.objectName():
-            deDialog.setObjectName(u"deDialog")
-        deDialog.setWindowModality(Qt.ApplicationModal)
-        deDialog.resize(440, 275)
-        self.gridLayout_2 = QGridLayout(deDialog)
-        self.gridLayout_2.setObjectName(u"gridLayout_2")
-        self.buttonBox = QDialogButtonBox(deDialog)
-        self.buttonBox.setObjectName(u"buttonBox")
-        self.buttonBox.setOrientation(Qt.Horizontal)
-        self.buttonBox.setStandardButtons(QDialogButtonBox.Cancel|QDialogButtonBox.Save)
-        self.buttonBox.setCenterButtons(True)
+class Ui_dialog(object):
+    def setupUi(self, dialog):
+        if not dialog.objectName():
+            dialog.setObjectName(u"dialog")
+        dialog.resize(572, 411)
+        self.verticalLayout_2 = QVBoxLayout(dialog)
+        self.verticalLayout_2.setObjectName(u"verticalLayout_2")
+        self.scrollArea = QScrollArea(dialog)
+        self.scrollArea.setObjectName(u"scrollArea")
+        self.scrollArea.setWidgetResizable(True)
+        self.scrollAreaWidgetContents = QWidget()
+        self.scrollAreaWidgetContents.setObjectName(u"scrollAreaWidgetContents")
+        self.scrollAreaWidgetContents.setGeometry(QRect(0, 0, 548, 387))
+        self.formLayout = QFormLayout(self.scrollAreaWidgetContents)
+        self.formLayout.setObjectName(u"formLayout")
+        self.labelName_2 = QLabel(self.scrollAreaWidgetContents)
+        self.labelName_2.setObjectName(u"labelName_2")
 
-        self.gridLayout_2.addWidget(self.buttonBox, 2, 0, 1, 1)
+        self.formLayout.setWidget(0, QFormLayout.LabelRole, self.labelName_2)
 
-        self.gridLayout = QGridLayout()
-        self.gridLayout.setObjectName(u"gridLayout")
-        self.label_4 = QLabel(deDialog)
-        self.label_4.setObjectName(u"label_4")
-        self.label_4.setMinimumSize(QSize(110, 0))
+        self.labelName = QLabel(self.scrollAreaWidgetContents)
+        self.labelName.setObjectName(u"labelName")
 
-        self.gridLayout.addWidget(self.label_4, 3, 0, 1, 1)
+        self.formLayout.setWidget(0, QFormLayout.FieldRole, self.labelName)
 
-        self.label = QLabel(deDialog)
-        self.label.setObjectName(u"label")
+        self.labelLabelBeschreibung = QLabel(self.scrollAreaWidgetContents)
+        self.labelLabelBeschreibung.setObjectName(u"labelLabelBeschreibung")
 
-        self.gridLayout.addWidget(self.label, 1, 0, 1, 1)
+        self.formLayout.setWidget(1, QFormLayout.LabelRole, self.labelLabelBeschreibung)
 
-        self.verticalLayout = QVBoxLayout()
-        self.verticalLayout.setObjectName(u"verticalLayout")
-        self.checkWert = QCheckBox(deDialog)
-        self.checkWert.setObjectName(u"checkWert")
-
-        self.verticalLayout.addWidget(self.checkWert)
-
-        self.spinWert = QSpinBox(deDialog)
-        self.spinWert.setObjectName(u"spinWert")
-
-        self.verticalLayout.addWidget(self.spinWert)
-
-        self.dspinWert = QDoubleSpinBox(deDialog)
-        self.dspinWert.setObjectName(u"dspinWert")
-
-        self.verticalLayout.addWidget(self.dspinWert)
-
-        self.teWert = QPlainTextEdit(deDialog)
-        self.teWert.setObjectName(u"teWert")
-
-        self.verticalLayout.addWidget(self.teWert)
-
-
-        self.gridLayout.addLayout(self.verticalLayout, 3, 1, 1, 1)
-
-        self.warning = QLabel(deDialog)
-        self.warning.setObjectName(u"warning")
-        self.warning.setVisible(False)
-        self.warning.setStyleSheet(u"background-color: rgb(255, 255, 0); color: black;")
-        self.warning.setWordWrap(True)
-
-        self.gridLayout.addWidget(self.warning, 0, 0, 1, 2)
-
-        self.label_2 = QLabel(deDialog)
-        self.label_2.setObjectName(u"label_2")
-
-        self.gridLayout.addWidget(self.label_2, 2, 0, 1, 1)
-
-        self.labelBeschreibung = QLabel(deDialog)
+        self.labelBeschreibung = QLabel(self.scrollAreaWidgetContents)
         self.labelBeschreibung.setObjectName(u"labelBeschreibung")
         self.labelBeschreibung.setWordWrap(True)
 
-        self.gridLayout.addWidget(self.labelBeschreibung, 2, 1, 1, 1)
+        self.formLayout.setWidget(1, QFormLayout.FieldRole, self.labelBeschreibung)
 
-        self.labelName = QLabel(deDialog)
-        self.labelName.setObjectName(u"labelName")
+        self.labelWert = QLabel(self.scrollAreaWidgetContents)
+        self.labelWert.setObjectName(u"labelWert")
+        self.labelWert.setMinimumSize(QSize(110, 0))
 
-        self.gridLayout.addWidget(self.labelName, 1, 1, 1, 1)
+        self.formLayout.setWidget(2, QFormLayout.LabelRole, self.labelWert)
+
+        self.verticalLayout = QVBoxLayout()
+        self.verticalLayout.setObjectName(u"verticalLayout")
+        self.checkText = QCheckBox(self.scrollAreaWidgetContents)
+        self.checkText.setObjectName(u"checkText")
+
+        self.verticalLayout.addWidget(self.checkText)
+
+        self.spinText = QSpinBox(self.scrollAreaWidgetContents)
+        self.spinText.setObjectName(u"spinText")
+        self.spinText.setButtonSymbols(QAbstractSpinBox.PlusMinus)
+        self.spinText.setMinimum(-99999)
+        self.spinText.setMaximum(99999)
+
+        self.verticalLayout.addWidget(self.spinText)
+
+        self.dspinText = QDoubleSpinBox(self.scrollAreaWidgetContents)
+        self.dspinText.setObjectName(u"dspinText")
+        self.dspinText.setButtonSymbols(QAbstractSpinBox.PlusMinus)
+        self.dspinText.setMinimum(-99999.000000000000000)
+        self.dspinText.setMaximum(99999.000000000000000)
+
+        self.verticalLayout.addWidget(self.dspinText)
+
+        self.teText = QPlainTextEdit(self.scrollAreaWidgetContents)
+        self.teText.setObjectName(u"teText")
+
+        self.verticalLayout.addWidget(self.teText)
+
+        self.horizontalSpacer = QSpacerItem(40, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+
+        self.verticalLayout.addItem(self.horizontalSpacer)
 
 
-        self.gridLayout_2.addLayout(self.gridLayout, 0, 0, 1, 1)
+        self.formLayout.setLayout(2, QFormLayout.FieldRole, self.verticalLayout)
 
-        self.verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        self.scrollArea.setWidget(self.scrollAreaWidgetContents)
 
-        self.gridLayout_2.addItem(self.verticalSpacer, 1, 0, 1, 1)
+        self.verticalLayout_2.addWidget(self.scrollArea)
 
 
-        self.retranslateUi(deDialog)
-        self.buttonBox.accepted.connect(deDialog.accept)
-        self.buttonBox.rejected.connect(deDialog.reject)
+        self.retranslateUi(dialog)
 
-        QMetaObject.connectSlotsByName(deDialog)
+        QMetaObject.connectSlotsByName(dialog)
     # setupUi
 
-    def retranslateUi(self, deDialog):
-        deDialog.setWindowTitle(QCoreApplication.translate("deDialog", u"Sephrasto - Einstellung bearbeiten...", None))
-        self.label_4.setText(QCoreApplication.translate("deDialog", u"Wert", None))
-        self.label.setText(QCoreApplication.translate("deDialog", u"Name", None))
-        self.checkWert.setText("")
-        self.warning.setText(QCoreApplication.translate("deDialog", u"<html><head/><body><p>Dies ist eine Ilaris Standard-Einstellung. Sobald du hier etwas ver\u00e4nderst, bekommst du eine pers\u00f6nliche Kopie und das Original wird in den Hausregeln gel\u00f6scht. Damit erh\u00e4ltst du f\u00fcr diese Einstellung keine automatischen Updates mehr mit neuen Sephrasto-Versionen.</p></body></html>", None))
-        self.label_2.setText(QCoreApplication.translate("deDialog", u"Beschreibung", None))
-        self.labelBeschreibung.setText("")
+    def retranslateUi(self, dialog):
+        dialog.setWindowTitle(QCoreApplication.translate("dialog", u"Sephrasto - Einstellung bearbeiten...", None))
+        self.labelName_2.setText(QCoreApplication.translate("dialog", u"Name", None))
         self.labelName.setText("")
+        self.labelLabelBeschreibung.setText(QCoreApplication.translate("dialog", u"Beschreibung", None))
+        self.labelBeschreibung.setText("")
+        self.labelWert.setText(QCoreApplication.translate("dialog", u"Wert", None))
+        self.checkText.setText("")
     # retranslateUi
 

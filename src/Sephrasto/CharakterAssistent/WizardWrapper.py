@@ -8,14 +8,56 @@ from EventBus import EventBus
 from CharakterAssistent.CharakterMerger import CharakterMerger
 import PathHelper
 import copy
+from Datenbank import Datenbank
+from Charakter import Char
+from UI import CharakterMain, Wizard
+from Core.Waffe import Waffe
 
-class Regeln(object):
+class WizardConfig():
+    def __init__(self, hausregeln, geschlecht, spezies, kultur, profession):
+        self.hausregeln = hausregeln
+        self.geschlecht = geschlecht
+        self.spezies = spezies
+        self.kultur = kultur
+        self.profession = profession
+
+    def apply(self, char, db):
+        if self.geschlecht is not None:
+            char.kurzbeschreibung = "Geschlecht: " + self.geschlecht
+            char.geschlecht = self.geschlecht
+
+        # 1. add default weapons (Sephrasto only adds them if the weapons array is empty, which might not be the case here)
+        for waffe in db.einstellungen["Waffen: Standardwaffen"].wert:
+            if waffe in db.waffen:
+                char.waffen.append(Waffe(db.waffen[waffe]))
+
+        # 2. add selected SKP
+        if self.spezies is not None:
+            CharakterMerger.xmlLesen(char, db, self.spezies.path, True, False)
+
+        if self.kultur is not None:
+            CharakterMerger.xmlLesen(char, db, self.kultur.path, False, True)
+
+        if self.profession is not None:
+            CharakterMerger.xmlLesen(char, db, self.profession.path, False, False)
+
+        # 3. Handle choices afterwards so EP spent can be displayed accurately
+        if self.spezies is not None:
+            CharakterMerger.handleChoices(char, db, self.spezies, self.geschlecht, True, False, False)
+
+        if self.kultur is not None:
+            CharakterMerger.handleChoices(char, db, self.kultur, self.geschlecht, False, True, False)
+
+        if self.profession is not None:
+            CharakterMerger.handleChoices(char, db, self.profession, self.geschlecht, False, False, True)
+
+class Regeln():
     def __init__(self):
         self.spezies = {}
         self.kulturen = {}
         self.professionen = {}
 
-class Element(object):
+class Element():
     def __init__(self, path, varPath, name, comboName):
         self.path = path
         self.varPath = varPath
@@ -23,37 +65,82 @@ class Element(object):
         self.comboName = comboName
 
 class WizardWrapper(object):
-    def __init__(self):
-        self.regelList = {}
-        datadirs = [os.path.join("Data", "CharakterAssistent"), os.path.join(Wolke.Settings['Pfad-Plugins'], "CharakterAssistent")]
-
-        for datadir in datadirs:
-            if not os.path.isdir(datadir):
+    def getBaukastenFolders():
+        baukastenFolders = []
+        for dataFolder in [os.path.join("Data", "CharakterAssistent"), os.path.join(Wolke.Settings['Pfad-Plugins'], "CharakterAssistent")]:
+            if not os.path.isdir(dataFolder):
                 continue
-
-            for regelnFolder in PathHelper.listdir(datadir):
-                if not os.path.isdir(os.path.join(datadir, regelnFolder)):
+            for dir in PathHelper.listdir(dataFolder):
+                dir = os.path.join(dataFolder, dir)
+                if not os.path.isdir(dir):
                     continue
-                regelnName = os.path.splitext(os.path.basename(regelnFolder))[0]
-                if not regelnName in self.regelList:
-                    self.regelList[regelnName] = Regeln()
-                regeln = self.regelList[regelnName]
+                baukastenFolders.append(dir)
+        return baukastenFolders
 
-                speziesFolder = os.path.join(datadir, regelnFolder, "Spezies")
-                regeln.spezies = {**regeln.spezies, **self.mapContainedFileNamesToPaths(speziesFolder)} #syntax = merge dict b into a
+    def __init__(self):
+        self.config = None
+        self.regelList = {}
 
-                kulturenFolder = os.path.join(datadir, regelnFolder, "Kultur")
-                regeln.kulturen = {**regeln.kulturen, **self.mapContainedFileNamesToPaths(kulturenFolder)}
+        self.baukastenFolders = WizardWrapper.getBaukastenFolders()
 
-                professionenFolder = os.path.join(datadir, regelnFolder, "Profession")
-                if os.path.isdir(professionenFolder):
-                    for professionKategorieFolder in PathHelper.listdir(professionenFolder):
-                        professionKategorieFolder = os.path.join(professionenFolder, professionKategorieFolder)
-                        if os.path.isdir(professionKategorieFolder):
-                            kategorie = os.path.basename(professionKategorieFolder)
-                            if not kategorie in regeln.professionen:
-                                regeln.professionen[kategorie] = {}
-                            regeln.professionen[kategorie] = {**regeln.professionen[kategorie], **self.mapContainedFileNamesToPaths(professionKategorieFolder)}
+        self.loadTemplates()
+        self.form = QtWidgets.QDialog()
+        self.form.setWindowFlags(
+                QtCore.Qt.Window |
+                QtCore.Qt.CustomizeWindowHint |
+                QtCore.Qt.WindowTitleHint |
+                QtCore.Qt.WindowCloseButtonHint)
+
+        self.ui = Wizard.Ui_formMain()
+        self.ui.setupUi(self.form)
+        self.ui.cbRegeln.addItems(EinstellungenWrapper.getDatenbanken(Wolke.Settings["Pfad-Regeln"]))
+        self.ui.cbRegeln.setCurrentText(Wolke.Settings['Datenbank'])
+
+        rl = sorted(list(self.regelList.keys()))
+        if "Ilaris" in rl:
+            rl.remove("Ilaris")
+            rl.insert(0, "Ilaris")
+        self.ui.cbBaukasten.addItems(rl)
+
+        if "CharakterAssistent_Regeln" in Wolke.Settings:
+            regeln = Wolke.Settings["CharakterAssistent_Regeln"]
+            if regeln in rl:
+                self.ui.cbBaukasten.setCurrentIndex(rl.index(regeln))
+
+        self.ui.cbBaukasten.currentIndexChanged.connect(self.regelnChanged)
+        if len(rl) == 1:
+            self.ui.lblRegeln.setVisible(False)
+            self.ui.cbBaukasten.setVisible(False)
+
+        self.ui.cbProfessionKategorie.currentIndexChanged.connect(self.professionKategorieChanged)
+        self.regelnChanged()
+        self.ui.btnAccept.clicked.connect(self.acceptClickedHandler)
+
+        self.form.setWindowModality(QtCore.Qt.ApplicationModal)
+        self.form.show()
+
+    def loadTemplates(self):
+        for baukastenFolder in self.baukastenFolders:
+            baukastenName = os.path.splitext(os.path.basename(baukastenFolder))[0]
+            if not baukastenName in self.regelList:
+                self.regelList[baukastenName] = Regeln()
+            regeln = self.regelList[baukastenName]
+
+            speziesFolder = os.path.join(baukastenFolder, "Spezies")
+            regeln.spezies = {**regeln.spezies, **self.mapContainedFileNamesToPaths(speziesFolder)} #syntax = merge dict b into a
+
+            kulturenFolder = os.path.join(baukastenFolder, "Kultur")
+            regeln.kulturen = {**regeln.kulturen, **self.mapContainedFileNamesToPaths(kulturenFolder)}
+
+            professionenFolder = os.path.join(baukastenFolder, "Profession")
+            if os.path.isdir(professionenFolder):
+                for professionKategorieFolder in PathHelper.listdir(professionenFolder):
+                    professionKategorieFolder = os.path.join(professionenFolder, professionKategorieFolder)
+                    if os.path.isdir(professionKategorieFolder):
+                        kategorie = os.path.basename(professionKategorieFolder)
+                        if not kategorie in regeln.professionen:
+                            regeln.professionen[kategorie] = {}
+                        regeln.professionen[kategorie] = {**regeln.professionen[kategorie], **self.mapContainedFileNamesToPaths(professionKategorieFolder)}
 
     def mapContainedFileNamesToPaths(self, folderPath, appendEP = True):
         result = {}
@@ -72,10 +159,6 @@ class WizardWrapper(object):
                     if elKey.endswith("_var"):
                         elVarPath = path
                         elKey = elKey[:-4]
-
-                        if logging.root.level == logging.DEBUG:
-                            logging.debug("CharakterAssistent: Verifiziere " + path)
-                            CharakterMerger.readChoices(path) # print log warnings for entire data folder on char creation
                     else:
                         elPath = path
                         if appendEP:
@@ -95,35 +178,25 @@ class WizardWrapper(object):
                         result[elKey] = Element(elPath, elVarPath, elKey, elName)
         return result
 
-    def setupMainForm(self):
-        rl = sorted(list(self.regelList.keys()))
-        if "Ilaris" in rl:
-            rl.remove("Ilaris")
-            rl.insert(0, "Ilaris")
-        self.ui.cbRegeln.addItems(rl)
-
-        if "CharakterAssistent_Regeln" in Wolke.Settings:
-            regeln = Wolke.Settings["CharakterAssistent_Regeln"]
-            if regeln in rl:
-                self.ui.cbRegeln.setCurrentIndex(rl.index(regeln))
-
-        self.ui.cbRegeln.currentIndexChanged.connect(self.regelnChanged)
-        self.ui.cbSpezies.currentIndexChanged.connect(self.updateAcceptButton)
-        self.ui.cbKultur.currentIndexChanged.connect(self.updateAcceptButton)
-        self.ui.cbProfession.currentIndexChanged.connect(self.updateAcceptButton)
-        self.ui.cbProfessionKategorie.currentIndexChanged.connect(self.professionKategorieChanged)
-
-        self.regelnChanged()
-        self.ui.btnAccept.clicked.connect(self.acceptClickedHandler)
-        self.ui.btnCancel.clicked.connect(self.cancelClickedHandler)
-
-    def updateAcceptButton(self):
-        self.ui.btnAccept.setEnabled(self.ui.cbSpezies.currentText() != "Überspringen" or
-                                     self.ui.cbKultur.currentText() != "Überspringen" or
-                                     (self.ui.cbProfession.currentText() != "" and self.ui.cbProfession.currentText() != "Überspringen"))
+    def verify(db, baukastenFolder):
+        errors = []
+        foldersToCheck = []
+        foldersToCheck.append(os.path.join(baukastenFolder, "Spezies"))
+        foldersToCheck.append(os.path.join(baukastenFolder, "Kultur"))
+        professionenFolder = os.path.join(baukastenFolder, "Profession")
+        if os.path.isdir(professionenFolder):
+            foldersToCheck.extend([os.path.join(professionenFolder, p) for p in PathHelper.listdir(professionenFolder)])
+        for folderPath in foldersToCheck:
+            for path in PathHelper.listdir(folderPath):
+                path = os.path.join(folderPath, path)
+                if os.path.isfile(path):
+                    fileNameSplit = os.path.splitext(os.path.basename(path))
+                    if fileNameSplit[0].endswith("_var") and fileNameSplit[1] == ".xml":
+                        errors.extend(CharakterMerger.verifyChoices(db, path))
+        return errors
 
     def professionKategorieChanged(self):
-        regeln = self.regelList[self.ui.cbRegeln.currentText()]
+        regeln = self.regelList[self.ui.cbBaukasten.currentText()]
 
         self.ui.cbProfession.clear()
         kategorie = self.ui.cbProfessionKategorie.currentText()
@@ -135,12 +208,12 @@ class WizardWrapper(object):
             self.ui.cbProfession.addItems([el.comboName for el in self.professionen])
 
     def regelnChanged(self):
-        Wolke.Settings["CharakterAssistent_Regeln"] = self.ui.cbRegeln.currentText()
+        Wolke.Settings["CharakterAssistent_Regeln"] = self.ui.cbBaukasten.currentText()
         EinstellungenWrapper.save()
 
-        if not self.ui.cbRegeln.currentText() in self.regelList:
+        if not self.ui.cbBaukasten.currentText() in self.regelList:
             return
-        regeln = self.regelList[self.ui.cbRegeln.currentText()]
+        regeln = self.regelList[self.ui.cbBaukasten.currentText()]
 
         self.ui.cbSpezies.clear()
         self.ui.cbKultur.clear()
@@ -159,62 +232,31 @@ class WizardWrapper(object):
         self.ui.cbProfessionKategorie.addItems(sorted(regeln.professionen.keys()))
         self.professionKategorieChanged()
 
-    def cancelClickedHandler(self):
-        self.form.close()
-
     def acceptClickedHandler(self):
-        if not self.ui.cbRegeln.currentText() in self.regelList:
-            self.form.close()
+        if not self.ui.cbBaukasten.currentText() in self.regelList:
+            self.config = None
+            self.form.reject()
             return
 
-        regeln = self.regelList[self.ui.cbRegeln.currentText()]
-
-        geschlecht = ""
+        geschlecht = None
         if self.ui.btnWeiblich.isChecked():
             geschlecht = "weiblich"
-        else:
+        elif self.ui.btnMaennlich.isChecked():
             geschlecht = "männlich"
+        elif self.ui.btnDivers.isChecked():
+            geschlecht = self.ui.leDivers.text()
 
-        Wolke.Char.kurzbeschreibung = "Geschlecht: " + geschlecht
-        Wolke.Char.geschlecht = geschlecht
-
-        # 1. add default weapons (Sephrasto only adds them if the weapons array is empty, which might not be the case here)
-        for waffe in Wolke.DB.einstellungen["Waffen: Standardwaffen"].toTextList():
-            if waffe in Wolke.DB.waffen:
-                Wolke.Char.waffen.append(copy.copy(Wolke.DB.waffen[waffe]))
-
-        # 2. add selected SKP
+        spezies = None
         if self.ui.cbSpezies.currentText() != "Überspringen":
             spezies = self.spezies[self.ui.cbSpezies.currentIndex()-1]
-            CharakterMerger.xmlLesen(spezies.path, True, False)
 
+        kultur = None
         if self.ui.cbKultur.currentText() != "Überspringen":
             kultur = self.kulturen[self.ui.cbKultur.currentIndex()-1]
-            CharakterMerger.xmlLesen(kultur.path, False, True)
 
-        if self.ui.cbProfessionKategorie.currentText() != "Überspringen":
-            professionKategorie = regeln.professionen[self.ui.cbProfessionKategorie.currentText()]
+        profession = None
+        if self.ui.cbProfessionKategorie.currentText() != "Überspringen" and self.ui.cbProfession.currentText() != "Überspringen":
+            profession = self.professionen[self.ui.cbProfession.currentIndex()-1]
 
-            if self.ui.cbProfession.currentText() != "Überspringen":
-                profession = self.professionen[self.ui.cbProfession.currentIndex()-1]
-                CharakterMerger.xmlLesen(profession.path, False, False)
-
-        # 3. Handle choices afterwards so EP spent can be displayed accurately
-        if self.ui.cbSpezies.currentText() != "Überspringen":
-            spezies = self.spezies[self.ui.cbSpezies.currentIndex()-1]
-            CharakterMerger.handleChoices(spezies, geschlecht, True, False, False)
-
-        if self.ui.cbKultur.currentText() != "Überspringen":
-            kultur = self.kulturen[self.ui.cbKultur.currentIndex()-1]
-            CharakterMerger.handleChoices(kultur, geschlecht, False, True, False)
-
-        if self.ui.cbProfessionKategorie.currentText() != "Überspringen":
-            professionKategorie = regeln.professionen[self.ui.cbProfessionKategorie.currentText()]
-
-            if self.ui.cbProfession.currentText() != "Überspringen":
-                profession = self.professionen[self.ui.cbProfession.currentIndex()-1]
-                CharakterMerger.handleChoices(profession, geschlecht, False, False, True)
-
-        Wolke.Char.aktualisieren()
-
-        self.form.hide()
+        self.config = WizardConfig(self.ui.cbRegeln.currentText(), geschlecht, spezies, kultur, profession)
+        self.form.accept()

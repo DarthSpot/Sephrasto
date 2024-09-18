@@ -17,7 +17,8 @@ from re import match
 from tempfile import NamedTemporaryFile
 import subprocess
 import logging
-from PySide6 import QtCore, QtWebEngineCore
+from PySide6 import QtCore, QtWidgets
+from QtUtils.WebEngineViewPlus import WebEngineViewPlus
 from contextlib import contextmanager
 import base64
 
@@ -25,8 +26,10 @@ import base64
 def waitForSignal(signal):
     loop = QtCore.QEventLoop()
     signal.connect(loop.quit)
-    yield
-    loop.exec_()
+    try:
+        yield
+    finally:
+        loop.exec()
 
 def check_output_silent(call):
     try:
@@ -323,6 +326,66 @@ def multistamp(file, stamp_file, out_file = None):
     check_output_silent(call)
     return out_file
 
+def getNumPages(file):
+    call = ['pdftk', file, 'dump_data_utf8']
+    data = check_output_silent(call)
+    data = data.decode('utf-8').split(os.linesep)
+    for d in data:
+        if d.startswith("NumberOfPages: "):
+            return int(d[len("NumberOfPages: "):])
+
+    logging.error("Unable to get number of pdf pages. File: " + file + "\nPDF-Data: " + str("\n".join(data or "none")))
+    return 0
+
+class PdfBookmark:
+    def __init__(self, title, pageNumber, level=1):
+        self.title = title
+        self.pageNumber = pageNumber
+        self.level = level
+
+def addBookmarks(file, bookmarks, out_file = None):
+    if not out_file:
+        handle, out_file = tempfile.mkstemp()
+        os.close(handle)
+
+    if len(bookmarks) > 0:
+        handle, bookmarksFile = tempfile.mkstemp()
+        os.close(handle)
+        content = []
+        for bm in bookmarks:
+            content.append("BookmarkBegin")
+            content.append("BookmarkTitle: " + bm.title)
+            content.append("BookmarkLevel: " + str(bm.level))
+            content.append("BookmarkPageNumber: " + str(bm.pageNumber))
+        with open(bookmarksFile, 'wb') as f:
+            f.write('\n'.join(content).encode())
+
+        call = ['pdftk', file, 'update_info_utf8', bookmarksFile, 'output', out_file]
+        check_output_silent(call)
+        os.remove(bookmarksFile)
+    return out_file
+
+def __htmlForBody(htmlBody):
+    return f"""<html>
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+        <script type="text/javascript" src="qrc:///qtwebchannel/qwebchannel.js"></script>
+        <script>
+        window.onload = function(){{
+            new QWebChannel(qt.webChannelTransport,
+                function (channel) {{
+                    Bridge = channel.objects.Bridge;
+                    Bridge.htmlLoaded();
+                }}
+            );
+        }}
+        </script>
+    </head>
+    <body>
+        {htmlBody}
+    </body>
+</html>"""
+
 def createEmptyPage(pageLayout, backgroundColor = QtCore.Qt.transparent, out_file = None):
     if not out_file:
         handle, out_file = tempfile.mkstemp()
@@ -330,7 +393,7 @@ def createEmptyPage(pageLayout, backgroundColor = QtCore.Qt.transparent, out_fil
         os.remove(out_file) # just using it to get a path
         out_file += ".pdf"
     
-    return convertHtmlToPdf("", "", pageLayout, backgroundColor, out_file)
+    return convertHtmlToPdf(__htmlForBody(""), "", pageLayout, 0, backgroundColor, out_file)
 
 def convertJpgToPdf(imageBytes, imageTargetSize, imageOffset, pageLayout, backgroundColor = QtCore.Qt.transparent, out_file = None):
     if not out_file:
@@ -339,12 +402,12 @@ def convertJpgToPdf(imageBytes, imageTargetSize, imageOffset, pageLayout, backgr
         os.remove(out_file) # just using it to get a path
         out_file += ".pdf"
     image = base64.b64encode(imageBytes).decode('ascii')
-    html = f"<div style='margin-left: {imageOffset[0]}px; margin-top: {imageOffset[1]}px; width: {imageTargetSize[0]}px; height: {imageTargetSize[1]}px;'>\
+    html = f"<div style='background: white; margin-left: {imageOffset[0]}px; margin-top: {imageOffset[1]}px; width: {imageTargetSize[0]}px; height: {imageTargetSize[1]}px;'>\
     <img src='data:image/jpg;base64, {image}' style='width: 100%; height: 100%; object-fit: contain;'>\
     </div>"
-    return convertHtmlToPdf(html, "", pageLayout, backgroundColor, out_file)
+    return convertHtmlToPdf(__htmlForBody(html), "", pageLayout, 0, backgroundColor, out_file)
 
-def convertHtmlToPdf(html, htmlBaseUrl, pageLayout, backgroundColor = QtCore.Qt.transparent, out_file = None):
+def convertHtmlToPdf(html, htmlBaseUrl, pageLayout, pageloadDelayMs = 0, backgroundColor = QtCore.Qt.transparent, out_file = None, webEngineView = None):
     if isinstance(htmlBaseUrl, str):
         htmlBaseUrl = QtCore.QUrl.fromLocalFile(QtCore.QFileInfo(htmlBaseUrl).absoluteFilePath())
 
@@ -354,12 +417,29 @@ def convertHtmlToPdf(html, htmlBaseUrl, pageLayout, backgroundColor = QtCore.Qt.
         os.remove(out_file) # just using it to get a path
         out_file += ".pdf"
 
-    page = QtWebEngineCore.QWebEnginePage()
-    page.setBackgroundColor(backgroundColor)
-    with waitForSignal(page.loadFinished):
-        page.setHtml(html, htmlBaseUrl)
+    # deliberatly not using WebEnginePage, seems to have problems with QWebChannel
+    if webEngineView is None:
+         webEngineView = WebEngineViewPlus()
+         webEngineView.installJSBridge()
 
-    with waitForSignal(page.pdfPrintingFinished):
-        page.printToPdf(out_file, pageLayout)
+    webEngineView.page().setBackgroundColor(backgroundColor)
+
+    if not hasattr(webEngineView, "htmlLoaded") or not "qrc:///qtwebchannel/qwebchannel.js" in html: #WebEngineViewPlus
+        raise Exception("Please use WebEngineViewPlus and implement the webchannel in your html file as documented in WebEngineViewPlus.")
+
+    with waitForSignal(webEngineView.htmlLoaded):
+        webEngineView.setHtml(html, htmlBaseUrl)
+
+    if pageloadDelayMs > 0:
+        timer = QtCore.QTimer()
+        with waitForSignal(timer.timeout):
+            timer.start(pageloadDelayMs)
+
+    QtWidgets.QApplication.processEvents()
+    webEngineView.update()
+    QtWidgets.QApplication.processEvents()
+
+    with waitForSignal(webEngineView.pdfPrintingFinished):
+        webEngineView.printToPdf(out_file, pageLayout)
 
     return out_file

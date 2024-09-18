@@ -2,6 +2,8 @@ from PySide6 import QtCore, QtWidgets, QtGui
 from Wolke import Wolke
 import UI.CharakterFreieFertigkeitenPicker
 from EventBus import EventBus
+from Hilfsmethoden import SortedCategoryToListDict
+from QtUtils.TreeExpansionHelper import TreeExpansionHelper
 
 class CharakterFreieFertigkeitenPickerWrapper(object):
     def __init__(self, fertigkeit=None):
@@ -27,22 +29,34 @@ class CharakterFreieFertigkeitenPickerWrapper(object):
                 QtCore.Qt.WindowMaximizeButtonHint |
                 QtCore.Qt.WindowMinimizeButtonHint)
 
-        self.ui.buttonBox.button(QtWidgets.QDialogButtonBox.Cancel).setText("Abbrechen")
+        self.ui.labelUnofficial.setVisible(Wolke.DB.einstellungen["FreieFertigkeiten: Inoffiziell-Warnung anzeigen"].wert)
 
         windowSize = Wolke.Settings["WindowSize-FreieFert"]
         self.form.resize(windowSize[0], windowSize[1])
+        self.onSetupUi()
         
-        self.kategorien = Wolke.DB.einstellungen["FreieFertigkeiten: Typen"].toTextList()
-        self.abbreviations = Wolke.DB.einstellungen["FreieFertigkeiten: Typ-Abkürzungen"].toTextDict('\n', False)
-
         self.ui.treeFerts.setHeaderHidden(True)
+
         self.populateTree()
 
         self.ui.treeFerts.itemSelectionChanged.connect(self.changeHandler)
         self.ui.treeFerts.itemDoubleClicked.connect(lambda item, column: self.ui.buttonBox.buttons()[0].click())
         self.ui.treeFerts.header().setSectionResizeMode(0, QtWidgets.QHeaderView.Fixed)
+
+        self.expansionHelper = TreeExpansionHelper(self.ui.treeFerts, self.ui.buttonExpandToggle)
+
+        self.ui.labelFilter.setText("\uf002")
         self.ui.nameFilterEdit.setFocus()
         self.ui.nameFilterEdit.textChanged.connect(self.populateTree)
+        self.shortcutSearch = QtGui.QAction()
+        self.shortcutSearch.setShortcut("Ctrl+F")
+        self.shortcutSearch.triggered.connect(self.ui.nameFilterEdit.setFocus)
+        self.form.addAction(self.shortcutSearch)
+        self.shortcutClearSearch = QtGui.QAction()
+        self.shortcutClearSearch.setShortcut("Esc")
+        self.shortcutClearSearch.triggered.connect(lambda: self.ui.nameFilterEdit.setText("") if self.ui.nameFilterEdit.hasFocus() and self.ui.nameFilterEdit.text() else self.form.reject())
+        self.form.addAction(self.shortcutClearSearch)
+
         self.form.setWindowModality(QtCore.Qt.ApplicationModal)
         self.form.show()
         self.ret = self.form.exec()
@@ -54,31 +68,33 @@ class CharakterFreieFertigkeitenPickerWrapper(object):
             self.fertigkeit = None
 
     def formatName(self, freieFertigkeit):
-        kategorie = freieFertigkeit.kategorie
-        for abbreviation in self.abbreviations:
-            kategorie = kategorie.replace(abbreviation, self.abbreviations[abbreviation])
+        kategorie = Wolke.DB.einstellungen["FreieFertigkeiten: Kategorien"].wert.keyAtIndex(freieFertigkeit.kategorie)
+        for key, value in Wolke.DB.einstellungen["FreieFertigkeiten: Kategorie-Abkürzungen"].wert.items():
+            kategorie = kategorie.replace(key, value)
 
         if kategorie.strip():
             return kategorie + ": " + freieFertigkeit.name
         else:
             return freieFertigkeit.name
+        
+    def onSetupUi(self):
+        pass # for usage in plugins
 
     def populateTree(self):
         currSet = self.current != ""
         self.ui.treeFerts.clear();
-        for kategorie in self.kategorien:
-            ferts = []
-            for fert in Wolke.DB.freieFertigkeiten:
-                if Wolke.DB.freieFertigkeiten[fert].kategorie != kategorie:
-                    continue
-                if self.ui.nameFilterEdit.text() and (not self.ui.nameFilterEdit.text().lower() in fert.lower()) and (not self.ui.nameFilterEdit.text().lower() in kategorie.lower()):
-                    continue
-                if fert != self.current and self.formatName(Wolke.DB.freieFertigkeiten[fert]) in [fert.name for fert in Wolke.Char.freieFertigkeiten]:
-                    continue
-                if Wolke.Char.voraussetzungenPrüfen(Wolke.DB.freieFertigkeiten[fert].voraussetzungen):
-                    ferts.append(fert)
-            ferts.sort()
-            if len(ferts) == 0:
+
+        fertigkeitenByKategorie = SortedCategoryToListDict(Wolke.DB.einstellungen["FreieFertigkeiten: Kategorien"].wert)
+        fertigkeitenByKategorie.setNameFilter(self.ui.nameFilterEdit.text())
+        for ff in Wolke.DB.freieFertigkeiten.values():
+            if ff.name != self.current and self.formatName(ff) in [fert.name for fert in Wolke.Char.freieFertigkeiten]:
+                continue
+            if Wolke.Char.voraussetzungenPrüfen(ff):
+                fertigkeitenByKategorie.append(ff.kategorie, ff.name)
+        fertigkeitenByKategorie.sortValues()
+
+        for kategorie, fertigkeiten in fertigkeitenByKategorie.items():
+            if len(fertigkeiten) == 0:
                 continue
 
             parent = QtWidgets.QTreeWidgetItem(self.ui.treeFerts)
@@ -88,29 +104,25 @@ class CharakterFreieFertigkeitenPickerWrapper(object):
             font.setBold(True)
             font.setCapitalization(QtGui.QFont.SmallCaps)
             parent.setFont(0, font)
-            for el in ferts:
+            for el in fertigkeiten:
                 if not currSet:
                     self.current = el
                     currSet = True
                 child = QtWidgets.QTreeWidgetItem(parent)
-                child.setText(0, Wolke.DB.freieFertigkeiten[el].name)
-                child.setData(0, QtCore.Qt.UserRole, el) # store key of talent in user data
-
-        self.ui.treeFerts.sortItems(1,QtCore.Qt.AscendingOrder)
+                child.setText(0, el)
 
         if self.current in Wolke.DB.freieFertigkeiten:
-            name = Wolke.DB.freieFertigkeiten[self.current].name
-            found = self.ui.treeFerts.findItems(name, QtCore.Qt.MatchExactly | QtCore.Qt.MatchRecursive)
+            found = self.ui.treeFerts.findItems(self.current, QtCore.Qt.MatchExactly | QtCore.Qt.MatchRecursive)
             if len(found) > 0:
-                self.ui.treeFerts.setCurrentItem(found[0], 0, QtCore.QItemSelectionModel.Select)
+                self.ui.treeFerts.setCurrentItem(found[0], 0, QtCore.QItemSelectionModel.Select | QtCore.QItemSelectionModel.Rows)
         elif self.ui.treeFerts.topLevelItemCount() > 0 and self.ui.treeFerts.topLevelItem(0).childCount() > 0:
-            self.ui.treeFerts.setCurrentItem(self.ui.treeFerts.topLevelItem(0).child(0), 0, QtCore.QItemSelectionModel.Select)
+            self.ui.treeFerts.setCurrentItem(self.ui.treeFerts.topLevelItem(0).child(0), 0, QtCore.QItemSelectionModel.Select | QtCore.QItemSelectionModel.Rows)
         self.changeHandler()
 
     def changeHandler(self):
         self.current = ""
         for el in self.ui.treeFerts.selectedItems():
-            if el.text(0) in self.kategorien:
+            if el.text(0) in Wolke.DB.einstellungen["FreieFertigkeiten: Kategorien"].wert:
                 continue
-            self.current = el.data(0, QtCore.Qt.UserRole) # contains key of fert
+            self.current = el.text(0)
             break

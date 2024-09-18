@@ -7,12 +7,13 @@ Created on Sun Mar  5 16:45:34 2017
 import UI.CharakterRuestungPicker
 from PySide6 import QtCore, QtWidgets, QtGui
 from Wolke import Wolke
-import Objekte
-import Definitionen
 import logging
 import copy
 from EventBus import EventBus
 from Hilfsmethoden import Hilfsmethoden
+from QtUtils.AutoResizingTextBrowser import TextEditAutoResizer
+from Hilfsmethoden import SortedCategoryToListDict
+from QtUtils.TreeExpansionHelper import TreeExpansionHelper
 
 class RuestungPicker(object):
 
@@ -40,7 +41,9 @@ class RuestungPicker(object):
                 QtCore.Qt.WindowMaximizeButtonHint |
                 QtCore.Qt.WindowMinimizeButtonHint)
 
-        self.ui.buttonBox.button(QtWidgets.QDialogButtonBox.Cancel).setText("Abbrechen")
+        self.autoResizeHelper = TextEditAutoResizer(self.ui.teBeschreibung)
+
+        self.ui.labelUnofficial.setVisible(Wolke.DB.einstellungen["Rüstungen: Inoffiziell-Warnung anzeigen"].wert)
 
         windowSize = Wolke.Settings["WindowSize-Ruestungen"]
         self.form.resize(windowSize[0], windowSize[1])
@@ -48,14 +51,13 @@ class RuestungPicker(object):
         self.ui.splitter.adjustSize()
         width = self.ui.splitter.size().width()
         self.ui.splitter.setSizes([int(width*0.6), int(width*0.4)])
-        
-        self.ruestungsTypen = Wolke.DB.einstellungen["Rüstungen: Typen"].toTextList()
 
         if ruestung is not None and ruestung != "":
             self.replaceButton = QtWidgets.QPushButton("Rüstung ersetzen")
             self.replaceButton.clicked.connect(self.replaceClicked)
             self.ui.buttonBox.addButton(self.replaceButton, QtWidgets.QDialogButtonBox.AcceptRole)
 
+        self.onSetupUi()
         logging.debug("Ui is Setup...")
         self.ui.treeArmors.setHeaderHidden(True)
         self.populateTree()
@@ -63,7 +65,21 @@ class RuestungPicker(object):
         self.ui.treeArmors.itemSelectionChanged.connect(self.changeHandler)
         self.ui.treeArmors.itemDoubleClicked.connect(lambda item, column: self.ui.buttonBox.buttons()[0].click())
         self.ui.treeArmors.header().setSectionResizeMode(0,QtWidgets.QHeaderView.Fixed)
+
+        self.expansionHelper = TreeExpansionHelper(self.ui.treeArmors, self.ui.buttonExpandToggle)
+
+        self.ui.labelFilter.setText("\uf002")
         self.ui.nameFilterEdit.setFocus()
+
+        self.shortcutSearch = QtGui.QAction()
+        self.shortcutSearch.setShortcut("Ctrl+F")
+        self.shortcutSearch.triggered.connect(self.ui.nameFilterEdit.setFocus)
+        self.form.addAction(self.shortcutSearch)
+        self.shortcutClearSearch = QtGui.QAction()
+        self.shortcutClearSearch.setShortcut("Esc")
+        self.shortcutClearSearch.triggered.connect(lambda: self.ui.nameFilterEdit.setText("") if self.ui.nameFilterEdit.hasFocus() and self.ui.nameFilterEdit.text() else self.form.reject())
+        self.form.addAction(self.shortcutClearSearch)
+
         self.updateInfo()
         logging.debug("Info Updated...")
         self.ui.nameFilterEdit.textChanged.connect(self.populateTree)
@@ -113,62 +129,56 @@ class RuestungPicker(object):
     def replaceClicked(self):
         self.ruestungErsetzen = True
 
+    def onSetupUi(self):
+        pass # for usage in plugins
+
     def populateTree(self):
         currSet = self.current != ""
         self.ui.treeArmors.clear()
 
-        for typ in self.ruestungsTypen:
-            ruestungen = []
-            for rues in Wolke.DB.rüstungen:
-                if Wolke.DB.rüstungen[rues].system != 0 and Wolke.DB.rüstungen[rues].system != self.system:
-                    continue
+        rüstungenByKategorie = SortedCategoryToListDict(Wolke.DB.einstellungen["Rüstungen: Kategorien"].wert)
+        rüstungenByKategorie.setNameFilter(self.ui.nameFilterEdit.text())
+        for r in Wolke.DB.rüstungen.values():
+            if r.system != 0 and r.system != self.system:
+                continue
+            rüstungenByKategorie.append(r.kategorie, r.name)
+        rüstungenByKategorie.sortValues()
 
-                if self.ui.nameFilterEdit.text():
-                    filterText = self.ui.nameFilterEdit.text().lower()
-                    if (not filterText in Wolke.DB.rüstungen[rues].name.lower()):
-                        continue
-                typ2 = min(Wolke.DB.rüstungen[rues].typ, len(self.ruestungsTypen)-1)
-                if self.ruestungsTypen[typ2] == typ:
-                    ruestungen.append(rues)
-
-            ruestungen.sort()
-            if len(ruestungen) == 0:
+        for kategorie, rüstungen in rüstungenByKategorie.items():
+            if len(rüstungen) == 0:
                 continue
 
             parent = QtWidgets.QTreeWidgetItem(self.ui.treeArmors)
-            parent.setText(0, typ)
+            parent.setText(0, kategorie)
             parent.setExpanded(True)
             font = QtGui.QFont(Wolke.Settings["Font"], Wolke.FontHeadingSizeL3)
             font.setBold(True)
             font.setCapitalization(QtGui.QFont.SmallCaps)
             parent.setFont(0, font)
-            for el in ruestungen:
+            for el in rüstungen:
                 if not currSet:
                     self.current = el
                     currSet = True
                 child = QtWidgets.QTreeWidgetItem(parent)
-                name = Wolke.DB.rüstungen[el].name or el
-                if name.endswith(" (ZRS)"):
-                    name = name[:-6]
-                child.setText(0, name)
-                child.setData(0, QtCore.Qt.UserRole, el) # store key of weapon in user data
-
-        self.ui.treeArmors.sortItems(1,QtCore.Qt.AscendingOrder)
+                if el.endswith(" (ZRS)"):
+                    child.setText(0, el[:-6])
+                else:
+                    child.setText(0, el)
 
         if self.current in Wolke.DB.rüstungen:
-            found = self.ui.treeArmors.findItems(Wolke.DB.rüstungen[self.current].name, QtCore.Qt.MatchExactly | QtCore.Qt.MatchRecursive)
+            found = self.ui.treeArmors.findItems(self.current, QtCore.Qt.MatchExactly | QtCore.Qt.MatchRecursive)
             if len(found) > 0:
-                self.ui.treeArmors.setCurrentItem(found[0], 0, QtCore.QItemSelectionModel.Select)
+                self.ui.treeArmors.setCurrentItem(found[0], 0, QtCore.QItemSelectionModel.Select | QtCore.QItemSelectionModel.Rows)
         elif self.ui.treeArmors.topLevelItemCount() > 0 and self.ui.treeArmors.topLevelItem(0).childCount() > 0:
-            self.ui.treeArmors.setCurrentItem(self.ui.treeArmors.topLevelItem(0).child(0), 0, QtCore.QItemSelectionModel.Select)
+            self.ui.treeArmors.setCurrentItem(self.ui.treeArmors.topLevelItem(0).child(0), 0, QtCore.QItemSelectionModel.Select | QtCore.QItemSelectionModel.Rows)
         self.changeHandler()
 
     def changeHandler(self):
         self.current = ""
         for el in self.ui.treeArmors.selectedItems():
-            if el.text(0) in self.ruestungsTypen:
+            if el.text(0) in Wolke.DB.einstellungen["Rüstungen: Kategorien"].wert:
                 continue
-            self.current = el.data(0, QtCore.Qt.UserRole) # contains key of armor
+            self.current = el.text(0)
             break
         self.updateInfo()
         
@@ -193,8 +203,7 @@ class RuestungPicker(object):
             if name.endswith(" (ZRS)"):
                 name = name[:-6]
             self.ui.lblName.setText(name)
-            typ = min(r.typ, len(self.ruestungsTypen)-1)
-            self.ui.lblTyp.setText(self.ruestungsTypen[typ])
+            self.ui.lblTyp.setText(r.kategorieName(Wolke.DB))
 
             if self.system == 1:
                 be = EventBus.applyFilter("ruestung_be", r.getRSGesamtInt(), { "name" : r.name })
@@ -211,5 +220,4 @@ class RuestungPicker(object):
             self.ui.lblBrust.setText(str(r.rs[4]))
             self.ui.lblKopf.setText(str(r.rs[5]))
             self.ui.lblZRS.setText("= " + str(sum(r.rs)))
-            self.ui.teBeschreibung.setPlainText("")
-            self.ui.teBeschreibung.appendHtml(Hilfsmethoden.fixHtml(r.text))
+            self.ui.teBeschreibung.setText(Hilfsmethoden.fixHtml(r.text))

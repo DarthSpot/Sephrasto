@@ -14,6 +14,7 @@ class _DefaultSettings:
 class Wolke:
     Char = None
     DB = None
+    CmdArgs = None
     Charakterbögen = {}
     Themes = {}
     Settings = {
@@ -28,36 +29,33 @@ class Wolke:
         'Pfad-Regeln': '',
         'Pfad-Plugins': '',
         'Pfad-Charakterbögen': '',
-        'Deaktivierte-Plugins': ['CharakterBeschreibungExt'],
         'Logging': 1,
         'PDF-Open': True,
         'UpdateCheck_Disable' : False,
         'UpdateCheck_DisableFor' : '',
         'Theme' : "Ilaris",
-        'Font' : "Crimson Pro",
+        'Font' : "", # we default this to os font after start
         'FontSize' : 0, # we default this to os font size after start
         'FontHeading' : "Aniron",
         'FontHeadingSize' : 8,
+        'CharListCols' : 1,
+        'CharListRows' : 5,
         'DPI-Skalierung' : False,
-        'WindowSize-Main' : [286, 346],
-        'WindowSize-Charakter' : [1130, 903],
+        'WindowSize-Main' : [426, 594],
+        'WindowSize-Charakter' : [1230, 970],
+        'WindowSize-Hilfe' : [1230, 970],
         'WindowSize-TalentProfan' : [650, 366],
         'WindowSize-TalentUeber' : _DefaultSettings.WindowSizeDefault2Col,
         'WindowSize-FreieFert' : _DefaultSettings.WindowSizeDefault1Col,
         'WindowSize-Waffen' : _DefaultSettings.WindowSizeDefault2Col,
         'WindowSize-Ruestungen' : _DefaultSettings.WindowSizeDefault2Col,
-        'WindowSize-Datenbank' : [661, 582],
-        'WindowSize-DBEinstellung' : _DefaultSettings.WindowSizeDefault1Col,
-        'WindowSize-DBFertigkeitProfan' : _DefaultSettings.WindowSizeDefault1Col,
-        'WindowSize-DBFertigkeitUeber' : _DefaultSettings.WindowSizeDefault1Col,
-        'WindowSize-DBFreieFert' : _DefaultSettings.WindowSizeDefault1Col,
-        'WindowSize-DBRegel' : _DefaultSettings.WindowSizeDefault1Col,
-        'WindowSize-DBRuestung' : _DefaultSettings.WindowSizeDefault1Col,
-        'WindowSize-DBTalent' : _DefaultSettings.WindowSizeDefault1Col,
-        'WindowSize-DBVorteil' : _DefaultSettings.WindowSizeDefault1Col,
-        'WindowSize-DBWaffeneigenschaft' : _DefaultSettings.WindowSizeDefault1Col,
-        'WindowSize-DBWaffe' : _DefaultSettings.WindowSizeDefault1Col,
-        'WindowSize-Einstellungen' : [589, 903],
+        'WindowSize-Datenbank' : [1056, 738],
+        'WindowSize-DatenbankMergeDialog' : _DefaultSettings.WindowSizeDefault2Col,
+        'WindowSize-Einstellungen' : [701, 640],
+        'WindowSize-Regelanhang' : _DefaultSettings.WindowSizeDefault1Col,
+        'WindowSize-ScriptPicker' : _DefaultSettings.WindowSizeDefault2Col,
+        'Letzte-Chars' : [],
+        'Plugin-Repos' : [{"name" : "default", "url" : "https://api.github.com/repos/brzGatsu/SephrastoPlugins/releases"}]
     }
     FontHeadingSizeL1 = 0
     FontHeadingSizeL3 = 0
@@ -68,3 +66,8 @@ class Wolke:
     DefaultOSFont = ""
     DefaultOSFontSize = 9
     FontAwesomeCSS = "" # Qt does not support 'class' in span tags (yet), so we store the style here for reuse in the app
+    FontAwesomeRegularCSS = ""
+    FontAwesomeFont = None
+    FontAwesomeRegularFont = None
+    MkDocsCSS = ""
+    CharImageSize = [260.0, 340.0]

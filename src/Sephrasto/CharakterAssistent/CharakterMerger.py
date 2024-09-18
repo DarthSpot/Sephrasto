@@ -1,63 +1,35 @@
 from CharakterAssistent import ChoicePopupWrapper
 from CharakterAssistent import VariantPopupWrapper
 from CharakterAssistent import Choice
-import Fertigkeiten
-import Objekte
-import Definitionen
-from Wolke import Wolke
+from Core.Energie import Energie
+from Core.Ruestung import Ruestung, RuestungDefinition
+from Core.Waffe import Waffe
+from Core.Fertigkeit import Fertigkeit
+from Core.FreieFertigkeit import FreieFertigkeit, FreieFertigkeitDefinition
 import lxml.etree as etree
 import logging
 from Hilfsmethoden import Hilfsmethoden
 from EventBus import EventBus
 from CharakterAssistent.ChoiceXmlVerifier import ChoiceXmlVerifier
 from Migrationen import Migrationen
+import os
+from VoraussetzungenListe import VoraussetzungenListe
 
-class CharakterMerger(object):
+class CharakterMerger:
     def __init__(self):
         pass
-
-    def setVariableVorteilKosten(vorteil, kosten):
-        char = Wolke.Char
-        if vorteil in char.vorteileVariableKosten and vorteil in char.vorteile:
-            char.vorteileVariableKosten[vorteil] += var.kosten
-        else:
-            char.vorteileVariableKosten[vorteil] = kosten
-
-    def setVorteilKommentar(vorteil, kommentar):
-        char = Wolke.Char
-        if kommentar == "":
-            return
-        if vorteil in char.vorteileKommentare and char.vorteileKommentare[vorteil] != "":
-            char.vorteileKommentare[vorteil] += ", " + kommentar
-        else:
-            char.vorteileKommentare[vorteil] = kommentar
-
-    def setVariableTalentKosten(talent, kosten, fert):
-        char = Wolke.Char
-        #round down to nearest multiple in case of a db cost change
-        defaultKosten = char.getDefaultTalentCost(talent, fert.steigerungsfaktor)
-        kosten = max(kosten - (kosten % defaultKosten), defaultKosten)
-        if talent in char.talenteVariableKosten:
-            char.talenteVariableKosten[talent] += kosten
-        else:
-            char.talenteVariableKosten[talent] = kosten
-
-    def setTalentKommentar(talent, kommentar):
-        char = Wolke.Char
-        if kommentar == "":
-            return
-        if talent in char.talenteKommentare and char.talenteKommentare[talent] != "" and not kommentar in char.talenteKommentare[talent]:
-            char.talenteKommentare[talent] += ", " + kommentar
-        else:
-            char.talenteKommentare[talent] = kommentar
-     
-    def addFreieFertigkeit(name, wert, overrideEmpty):
+    
+    def addFreieFertigkeit(char, db, name, wert, overrideEmpty):
         if name == "":
             return
 
-        char = Wolke.Char
-        fert = Fertigkeiten.FreieFertigkeit()            
-        fert.name = name
+        definition = None
+        if name in db.freieFertigkeiten:
+            definition = db.freieFertigkeiten[name]
+        else:
+            definition = FreieFertigkeitDefinition()
+            definition.name = name
+        fert = FreieFertigkeit(definition, char)            
         fert.wert = wert
 
         found = False
@@ -74,9 +46,10 @@ class CharakterMerger(object):
             else:
                 char.freieFertigkeiten.append(fert)
 
-    def readChoices(path):
+    def readChoices(db, path):
         root = etree.parse(path).getroot()
-        ChoiceXmlVerifier.validateXml(root)
+        errors = []
+        errors.extend(ChoiceXmlVerifier.validateXml(root))
 
         variantListCollections = []
         for varianten in root.findall('Varianten'):
@@ -85,18 +58,24 @@ class CharakterMerger(object):
                 variantListCollection.chooseOne = int(varianten.attrib['pflichtwahl']) != 0
             else:
                 variantListCollection.chooseOne = False
-            CharakterMerger.xmlNodeToChoices(variantListCollection, varianten.findall('Variante'))
+            errors.extend(CharakterMerger.xmlNodeToChoices(db, variantListCollection, varianten.findall('Variante')))
             variantListCollections.append(variantListCollection)
         choiceListCollection = Choice.ChoiceListCollection()
-        CharakterMerger.xmlNodeToChoices(choiceListCollection, root.findall('Auswahl'))
+        errors.extend(CharakterMerger.xmlNodeToChoices(db, choiceListCollection, root.findall('Auswahl')))
 
-        return variantListCollections, choiceListCollection
+        return variantListCollections, choiceListCollection, errors
 
-    def handleChoices(element, geschlecht, spezies, kultur, profession):
-        char = Wolke.Char
+    def verifyChoices(db, path):
+        _, _, errors = CharakterMerger.readChoices(db, path)
+        if len(errors) > 0:
+            errors.insert(0, f"<b>Fehler gefunden in {os.path.basename(path)}</b>")
+            errors.append("<hr>")
+        return errors
 
+    def handleChoices(char, db, element, geschlecht, spezies, kultur, profession):
         if not spezies:
-            char.kurzbeschreibung += ", "
+            if char.kurzbeschreibung:
+                char.kurzbeschreibung += ", "
             if kultur:
                 char.kurzbeschreibung += "Kultur: " + element.name
                 char.kultur = element.name
@@ -109,7 +88,7 @@ class CharakterMerger(object):
 
         description = []
 
-        variantListCollections, choiceListCollection = CharakterMerger.readChoices(element.varPath)
+        variantListCollections, choiceListCollection, _ = CharakterMerger.readChoices(db, element.varPath)
 
         variantsSelected = []
         indexOffset = 0
@@ -126,7 +105,7 @@ class CharakterMerger(object):
             if (variantListCollection.chooseOne and len(variantListCollection.choiceLists) == 1):
                 choices.append(0)
             else:
-                popup = VariantPopupWrapper.VariantPopupWrapper(variantListCollection, element.name, char.epAusgegeben)
+                popup = VariantPopupWrapper.VariantPopupWrapper(char, db, variantListCollection, element.name, char.epAusgegeben)
                 choices = popup.choices
             for index in choices:
                 variantsSelected.append(indexOffset + index)
@@ -139,7 +118,7 @@ class CharakterMerger(object):
                     description.append(choiceList.beschreibung)
 
                 for choice in choiceList.choices:
-                    CharakterMerger.applyChoiceToChar(choice)
+                    CharakterMerger.applyChoiceToChar(char, db, choice)
             indexOffset += len(variantListCollection.choiceLists)
 
         if len(description) > 0:
@@ -163,15 +142,16 @@ class CharakterMerger(object):
                 continue
 
             #Let user choose via popup or auto-choose if there is only one entry (usually due to removal - see below)
-            popup = ChoicePopupWrapper.ChoicePopupWrapper(choiceList, element.name, char.epAusgegeben)
+            popup = ChoicePopupWrapper.ChoicePopupWrapper(char, db, choiceList, element.name, char.epAusgegeben)
             choice = popup.choice
 
             if not choice:
                 continue
             choiceListCollection.filter(i, choice)
-            CharakterMerger.applyChoiceToChar(choice)
+            CharakterMerger.applyChoiceToChar(char, db, choice)
 
-    def xmlNodeToChoices(choiceListCollection, node):
+    def xmlNodeToChoices(db, choiceListCollection, node):
+        errors = []
         for child in node:
             choiceList = Choice.ChoiceList()
 
@@ -184,11 +164,7 @@ class CharakterMerger(object):
             if 'beschreibung' in child.attrib:
                 choiceList.beschreibung = child.attrib['beschreibung']
             if 'geschlecht' in child.attrib:
-                geschlecht = child.attrib['geschlecht']
-                if geschlecht != "männlich" and geschlecht != "weiblich":
-                    logging.warn("CharakterAssistent: Unbekanntes Geschlecht " + geschlecht)
-                else:
-                    choiceList.geschlecht = geschlecht
+                choiceList.geschlecht = child.attrib['geschlecht']
 
             for fer in child.findall('Eigenheit'):
                 choice = Choice.Choice()
@@ -202,8 +178,9 @@ class CharakterMerger(object):
                 choice.wert = int(fer.attrib['wert'])
                 choice.typ = "Attribut"
 
-                if not choice.name in Definitionen.Attribute.keys():
-                    logging.warn("CharakterAssistent: konnte Attribut " + choice.name + " nicht finden")
+                if not choice.name in db.attribute:
+                    errors.append("Konnte Attribut " + choice.name + " nicht finden")
+                    logging.warn(errors[-1])
                     continue
                 choiceList.choices.append(choice)
 
@@ -220,8 +197,9 @@ class CharakterMerger(object):
                 choice.wert = int(fer.attrib['wert'])
                 choice.typ = "Fertigkeit"
 
-                if not choice.name in Wolke.DB.fertigkeiten:
-                    logging.warn("CharakterAssistent: konnte Fertigkeit " + choice.name + " nicht finden")
+                if not choice.name in db.fertigkeiten:
+                    errors.append("Konnte Fertigkeit " + choice.name + " nicht finden")
+                    logging.warn(errors[-1])
                     continue
                 choiceList.choices.append(choice)
                 
@@ -231,8 +209,9 @@ class CharakterMerger(object):
                 choice.wert = int(fer.attrib['wert'])
                 choice.typ = "Übernatürliche-Fertigkeit"
 
-                if not choice.name in Wolke.DB.übernatürlicheFertigkeiten:
-                    logging.warn("CharakterAssistent: konnte Übernatürliche Fertigkeit " + choice.name + " nicht finden")
+                if not choice.name in db.übernatürlicheFertigkeiten:
+                    errors.append("Konnte Übernatürliche Fertigkeit " + choice.name + " nicht finden")
+                    logging.warn(errors[-1])
                     continue
                 choiceList.choices.append(choice)
 
@@ -245,8 +224,9 @@ class CharakterMerger(object):
                 if "wert" in vor.attrib:
                     choice.wert = int(vor.attrib["wert"])
 
-                if not choice.name in Wolke.DB.vorteile:
-                    logging.warn("CharakterAssistent: konnte Vorteil " + choice.name + " nicht finden")
+                if not choice.name in db.vorteile:
+                    errors.append("Konnte Vorteil " + choice.name + " nicht finden")
+                    logging.warn(errors[-1])
                     continue
                 choiceList.choices.append(choice)
 
@@ -259,16 +239,16 @@ class CharakterMerger(object):
                 if "wert" in tal.attrib:
                     choice.wert = int(tal.attrib["wert"])
 
-                if not choice.name in Wolke.DB.talente:
-                    logging.warn("CharakterAssistent: konnte Talent " + choice.name + " nicht finden")
+                if not choice.name in db.talente:
+                    errors.append("Konnte Talent " + choice.name + " nicht finden")
+                    logging.warn(errors[-1])
                     continue
                 choiceList.choices.append(choice)
 
             choiceListCollection.choiceLists.append(choiceList)
+        return errors
 
-    def applyChoiceToChar(choice):
-        char = Wolke.Char
-
+    def applyChoiceToChar(char, db, choice):
         if choice.typ == "Eigenheit":
             if len(char.eigenheiten) == 8:
                 return
@@ -280,60 +260,61 @@ class CharakterMerger(object):
             char.attribute[choice.name].wert += int(choice.wert)
             char.attribute[choice.name].aktualisieren()
         elif choice.typ == "Freie-Fertigkeit":
-            CharakterMerger.addFreieFertigkeit(choice.name, choice.wert, True)
+            CharakterMerger.addFreieFertigkeit(char, db, choice.name, choice.wert, True)
         elif choice.typ == "Fertigkeit":
+            if not choice.name in char.fertigkeiten:
+                return
             char.fertigkeiten[choice.name].wert = max(char.fertigkeiten[choice.name].wert + choice.wert, 0)
-            char.fertigkeiten[choice.name].aktualisieren(char.attribute)
+            char.fertigkeiten[choice.name].aktualisieren()
         elif choice.typ == "Übernatürliche-Fertigkeit":
+            if not choice.name in char.übernatürlicheFertigkeiten:
+                return
             char.übernatürlicheFertigkeiten[choice.name].wert = max(char.übernatürlicheFertigkeiten[choice.name].wert + choice.wert, 0)
-            char.übernatürlicheFertigkeiten[choice.name].aktualisieren(char.attribute)
+            char.übernatürlicheFertigkeiten[choice.name].aktualisieren()
         elif choice.typ == "Vorteil":
             if choice.wert == -1:
                 char.removeVorteil(choice.name)
             else:
-                if Wolke.DB.vorteile[choice.name].variableKosten:
-                    CharakterMerger.setVariableVorteilKosten(choice.name, choice.wert)
-                if Wolke.DB.vorteile[choice.name].kommentarErlauben:
-                    CharakterMerger.setVorteilKommentar(choice.name, choice.kommentar)
-                char.addVorteil(choice.name)
+                exists = choice.name in char.vorteile
+                vorteil = char.addVorteil(choice.name)
+                if vorteil.kommentarErlauben and choice.kommentar in vorteil.kommentar:
+                    return
+
+                if vorteil.variableKosten:
+                    if exists:
+                        vorteil.kosten += choice.wert
+                    else:
+                        vorteil.kosten = choice.wert
+                if vorteil.kommentarErlauben and choice.kommentar:
+                    if vorteil.kommentar:
+                        vorteil.kommentar += ", " + choice.kommentar
+                    else:
+                        vorteil.kommentar = choice.kommentar
         elif choice.typ == "Talent":
             found = False
-            talent = Wolke.DB.talente[choice.name]
             if choice.wert == -1:
-                for fert in talent.fertigkeiten:
-                    if not talent.isSpezialTalent():
-                        if fert in char.fertigkeiten and choice.name in char.fertigkeiten[fert].gekaufteTalente:
-                            char.fertigkeiten[fert].gekaufteTalente.remove(choice.name)
-                    else:
-                        if fert in char.übernatürlicheFertigkeiten and choice.name in char.übernatürlicheFertigkeiten[fert].gekaufteTalente:
-                            char.übernatürlicheFertigkeiten[fert].gekaufteTalente.remove(choice.name)
-            else:
-                for fert in talent.fertigkeiten:
-                    if not talent.isSpezialTalent():
-                        if fert in char.fertigkeiten:
-                            if choice.name in char.fertigkeiten[fert].gekaufteTalente:
-                                continue
-                            char.fertigkeiten[fert].gekaufteTalente.append(choice.name)
-                    else:
-                        if fert in char.übernatürlicheFertigkeiten:
-                            if choice.name in char.übernatürlicheFertigkeiten[fert].gekaufteTalente and not talent.variableKosten:
-                                continue
-                            if not choice.name in char.übernatürlicheFertigkeiten[fert].gekaufteTalente:
-                                char.übernatürlicheFertigkeiten[fert].gekaufteTalente.append(choice.name)
-                            if talent.variableKosten:
-                                CharakterMerger.setVariableTalentKosten(talent.name, choice.wert, char.übernatürlicheFertigkeiten[fert])
-                            if talent.kommentarErlauben:
-                                CharakterMerger.setTalentKommentar(talent.name, choice.kommentar)
+                char.removeTalent(choice.name)
+            else:      
+                exists = choice.name in char.talente
+                talent = char.addTalent(choice.name)
+                if talent.kommentarErlauben and choice.kommentar in talent.kommentar:
+                    return
 
+                if talent.variableKosten:
+                    if exists:
+                        talent.kosten += choice.wert
+                    else:
+                        talent.kosten = choice.wert
+                if talent.kommentarErlauben and choice.kommentar:
+                    if talent.kommentar:
+                        talent.kommentar += ", " + choice.kommentar
+                    else:
+                        talent.kommentar = choice.kommentar
         char.aktualisieren()
 
-    def xmlLesen(path, spezies, kultur):
-        char = Wolke.Char
+    def xmlLesen(char, db, path, spezies, kultur):
         root = etree.parse(path).getroot()
-
-        versionXml = root.find('Version')
-        charVersion = int(versionXml.find('DatenbankVersion').text)
-        Migrationen.charakterMigrieren(root, charVersion)
+        Migrationen.charakterMigrieren(root)
 
         alg = root.find('Beschreibung')
 
@@ -354,11 +335,6 @@ class CharakterMerger(object):
         skipTal = ""
         if not tmp is None:
             if kultur:
-                if "Gebräuche" in char.fertigkeiten:
-                    gebräucheFert = char.fertigkeiten["Gebräuche"]
-                    oldTal = "Gebräuche: " + char.heimat
-                    if oldTal in gebräucheFert.gekaufteTalente:
-                        gebräucheFert.gekaufteTalente.remove(oldTal)
                 char.heimat = tmp.text
             else:
                 skipTal = "Gebräuche: " + tmp.text
@@ -370,83 +346,108 @@ class CharakterMerger(object):
                 char.eigenheiten.append(eig.text)
 
         for atr in root.findall('Attribute/*'):
-            if not spezies and not kultur:
-                char.attribute[atr.tag].wert = max(char.attribute[atr.tag].wert, int(atr.text))
-            else:
-                char.attribute[atr.tag].wert += int(atr.text)
-            char.attribute[atr.tag].aktualisieren()
-
-        for ene in root.findall('Energien/AsP'):
-            char.asp.wert += int(ene.attrib['wert'])
-        for ene in root.findall('Energien/KaP'):
-            char.kap.wert += int(ene.attrib['wert'])
-
-        for vor in root.findall('Vorteile'):
-            if "minderpakt" in vor.attrib:
-                char.minderpakt = vor.get('minderpakt')
-                char.addVorteil(char.minderpakt)
-            else:
-                char.minderpakt = None
-
-        for vor in root.findall('Vorteile/*'):
-            if not vor.text in Wolke.DB.vorteile:
+            name = atr.get("name")
+            wert = atr.get("wert")
+            if not name in db.attribute:
                 continue
-            if 'variableKosten' in vor.attrib:
-                CharakterMerger.setVariableVorteilKosten(vor.text, int(vor.attrib['variableKosten']))
-            if 'kommentar' in vor.attrib:
-                CharakterMerger.setVorteilKommentar(vor.text, vor.attrib['kommentar'])
+            if not spezies and not kultur:
+                char.attribute[name].wert = max(char.attribute[name].wert, int(wert))
+            else:
+                char.attribute[name].wert += int(wert)
+            char.attribute[name].aktualisieren()
 
-            char.addVorteil(vor.text)
+        for ene in root.findall('Energien/*'):
+            name = atr.get("name")
+            wert = atr.get("wert")
+            if not name in db.energien:
+                continue
+            if name in char.energien:
+                energie = char.energien[name]
+            else:
+                energie = Energie(db.energien[name], char)
+
+            energie.wert += int(wert)
+            char.energien[energie.name] = energie
+
+        for vor in root.findall('Vorteile/Vorteil'):
+            name = vor.attrib['name']
+            if not name in db.vorteile:
+                continue
+            exists = name in char.vorteile
+            vorteil = char.addVorteil(name)
+
+            if vorteil.kommentarErlauben and 'kommentar' in vor.attrib and vor.attrib['kommentar'] in vorteil.kommentar:
+                continue
+
+            if vorteil.variableKosten and 'variableKosten' in vor.attrib:
+                if exists:
+                    vorteil.kosten += int(vor.attrib['variableKosten'])
+                else:
+                    vorteil.kosten = int(vor.attrib['variableKosten'])
+            if vorteil.kommentarErlauben and 'kommentar' in vor.attrib and vor.attrib['kommentar']:
+                if vorteil.kommentar:
+                    vorteil.kommentar += ", " + vor.attrib['kommentar']
+                else:
+                    vorteil.kommentar = vor.attrib['kommentar']
+
+        if "Minderpakt" in char.vorteile:
+            minderpakt = char.vorteile["Minderpakt"]
+
+            #remove potential existing minderpakte
+            kommentare = minderpakt.kommentar.split(", ")
+            if len(kommentare) > 1:
+                for kommentar in kommentare[:-1]:
+                    char.removeVorteil(kommentar)
+            minderpakt.kommentar = kommentare[-1]
+
+            #handle minderpakt as the regular character load would
+            if not minderpakt.kommentar in db.vorteile:
+                char.removeVorteil(minderpakt)
+            else:
+                minderpakt.voraussetzungen = VoraussetzungenListe().compile("Vorteil " + minderpakt.kommentar, db)
+                vorteil = char.addVorteil(minderpakt.kommentar)
+                vorteil.voraussetzungen = VoraussetzungenListe().compile("Vorteil Minderpakt", db)
+                vorteil.kosten = 20
 
         for fer in root.findall('Fertigkeiten/Fertigkeit'):
             nam = fer.attrib['name']
-            if not nam in Wolke.DB.fertigkeiten:
+            if not nam in db.fertigkeiten:
                 continue
 
             if nam in char.fertigkeiten:
-                fert = char.fertigkeiten[nam].__deepcopy__()
+                fert = char.fertigkeiten[nam]
             else:
-                fert = Wolke.DB.fertigkeiten[nam].__deepcopy__()
+                fert = Fertigkeit(db.fertigkeiten[nam], char)
 
             fert.wert += int(fer.attrib['wert'])
-            for tal in fer.findall('Talente/Talent'):
-                nam = tal.attrib['name']
-                if not nam in Wolke.DB.talente:
-                    continue
-                if nam in fert.gekaufteTalente:
-                    continue
-                if nam == skipTal:
-                    continue
-                fert.gekaufteTalente.append(nam)
-                if 'variableKosten' in tal.attrib:
-                    CharakterMerger.setVariableTalentKosten(nam, int(tal.attrib['variableKosten']), fert)
-                if 'kommentar' in tal.attrib:
-                    CharakterMerger.setTalentKommentar(nam, int(tal.attrib['kommentar']))
+            fert.aktualisieren()
+            char.fertigkeiten[fert.name] = fert
 
-            fert.aktualisieren(char.attribute)
-            char.fertigkeiten.update({fert.name: fert})
-
-        for fer in root.findall('Fertigkeiten/FreieFertigkeit'):
-            CharakterMerger.addFreieFertigkeit(fer.attrib['name'], int(fer.attrib['wert']), False)
+        for fer in root.findall('FreieFertigkeiten/FreieFertigkeit'):
+            CharakterMerger.addFreieFertigkeit(char, db, fer.attrib['name'], int(fer.attrib['wert']), False)
 
         objekte = root.find('Objekte');
         for rüs in objekte.findall('Rüstungen/Rüstung'):
             if len(char.rüstung) == 3:
                 break
-
-            if not rüs.attrib['name']:
+            name = rüs.attrib['name']
+            if not name:
                 continue
 
             exists = False
             for r in char.rüstung:
-                if r.name == rüs.attrib['name']:
+                if r.name == name:
                     exists = True
                     break
             if exists:
                 continue
 
-            rüst = Objekte.Ruestung()
-            rüst.name = rüs.attrib['name']
+            if name in db.rüstungen:
+                rüst = Ruestung(db.rüstungen[name])
+            else:
+                definition = RuestungDefinition()
+                definition.name = name
+                rüst = Ruestung(definition)
             rüst.be = int(rüs.attrib['be'])
             rüst.rs = Hilfsmethoden.RsStr2Array(rüs.attrib['rs'])
             char.rüstung.append(rüst)
@@ -458,22 +459,16 @@ class CharakterMerger(object):
             if not waf.attrib['name']:
                 continue
 
-            exists = False
-            for w in char.waffen:
-                if w.name == waf.get('id'):
-                    exists = True
-                    break
-            if exists:
+            nam = waf.attrib['id']
+            if not nam in db.waffen or nam in [w.name for w in char.waffen]:
                 continue
             
-            if waf.attrib['typ'] == 'Nah':
-                waff = Objekte.Nahkampfwaffe()
-            else:
-                waff = Objekte.Fernkampfwaffe()
+            waff = Waffe(db.waffen[nam])
+
+            if waff.fernkampf:
                 waff.lz = int(waf.attrib['lz'])
             waff.wm = int(waf.get('wm') or 0)
             waff.anzeigename = waf.attrib['name']
-            waff.name = waf.get('id') or waff.anzeigename
             waff.rw = int(waf.attrib['rw'])
             waff.würfel = int(waf.attrib['würfel'])
             waff.würfelSeiten = int(waf.attrib['würfelSeiten'])
@@ -482,12 +477,6 @@ class CharakterMerger(object):
                 waff.eigenschaften = list(map(str.strip, waf.attrib['eigenschaften'].split(",")))
             waff.härte = int(waf.attrib['härte'])
             waff.kampfstil = waf.attrib['kampfstil']
-            if waff.name in Wolke.DB.waffen:
-                dbWaffe = Wolke.DB.waffen[waff.name]
-                waff.fertigkeit = dbWaffe.fertigkeit
-                waff.talent = dbWaffe.talent
-                waff.kampfstile = dbWaffe.kampfstile.copy()
-
             char.waffen.append(waff)
 
         for aus in objekte.findall('Ausrüstung/Ausrüstungsstück'):
@@ -498,32 +487,43 @@ class CharakterMerger(object):
 
         for fer in root.findall('ÜbernatürlicheFertigkeiten/ÜbernatürlicheFertigkeit'):
             nam = fer.attrib['name']
-            if not nam in Wolke.DB.übernatürlicheFertigkeiten:
+            if not nam in db.übernatürlicheFertigkeiten:
                 continue
 
             if nam in char.übernatürlicheFertigkeiten:
-                fert = char.übernatürlicheFertigkeiten[nam].__deepcopy__()
+                fert = char.übernatürlicheFertigkeiten[nam]
             else:
-                fert = Wolke.DB.übernatürlicheFertigkeiten[nam].__deepcopy__()
+                fert = Fertigkeit(db.übernatürlicheFertigkeiten[nam], char)
 
             fert.wert += int(fer.attrib['wert'])
             if 'exportieren' in fer.attrib:
                 fert.addToPDF = fer.attrib['exportieren'] == "1"
-            for tal in fer.findall('Talente/Talent'):
-                nam = tal.attrib['name']
-                if not nam in Wolke.DB.talente:
-                    continue
-                if nam in fert.gekaufteTalente:
-                    continue
-                fert.gekaufteTalente.append(nam)
+            fert.aktualisieren()
+            char.übernatürlicheFertigkeiten[fert.name] = fert
 
-                if 'variableKosten' in tal.attrib:
-                    CharakterMerger.setVariableTalentKosten(nam, int(tal.attrib['variableKosten']), fert)
+        for tal in root.findall('Talente/Talent'):
+            nam = tal.attrib['name']
+            if not nam in db.talente:
+                continue
+            if nam == skipTal:
+                continue
 
-                if 'kommentar' in tal.attrib:
-                    CharakterMerger.setTalentKommentar(nam, tal.attrib['kommentar'])
+            exists = nam in char.talente
+            talent = char.addTalent(nam)
 
-            fert.aktualisieren(char.attribute)
-            char.übernatürlicheFertigkeiten.update({fert.name: fert})
+            if talent.kommentarErlauben and 'kommentar' in tal.attrib and tal.attrib['kommentar'] in talent.kommentar:
+                continue
+
+            if talent.variableKosten and 'variableKosten' in tal.attrib:
+                if exists:
+                    talent.kosten += + int(tal.attrib['variableKosten'])
+                else:
+                    talent.kosten = int(tal.attrib['variableKosten'])
+
+            if talent.kommentarErlauben and 'kommentar' in tal.attrib and tal.attrib['kommentar']:
+                if talent.kommentar:
+                    talent.kommentar += ", " + tal.attrib['kommentar']
+                else:
+                    talent.kommentar = tal.attrib['kommentar']
 
         char.aktualisieren()

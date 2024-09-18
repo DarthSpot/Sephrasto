@@ -11,7 +11,6 @@ import logging
 import copy
 from Hilfsmethoden import Hilfsmethoden
 from EventBus import EventBus
-import Definitionen
 
 class AttrWrapper(QtCore.QObject):
     ''' 
@@ -31,25 +30,192 @@ class AttrWrapper(QtCore.QObject):
 
         # pre-sort and -filter vorteile to improve performance of tooltip generation
         self.vorteile = {}
-        for attribut in Definitionen.Attribute:
+        for attribut in Wolke.Char.attribute:
             self.vorteile[attribut] = []
-        for vorteil in sorted(Wolke.DB.vorteile.values(), key = lambda v: v.typ):
-            for attribut in Definitionen.Attribute:
-                if Hilfsmethoden.isAttributVoraussetzung(attribut, vorteil.voraussetzungen):
+        for vorteil in sorted(Wolke.DB.vorteile.values(), key = lambda v: v.kategorie):
+            for attribut in Wolke.Char.attribute:
+                if vorteil.voraussetzungen.isAttributVoraussetzung(attribut):
                     self.vorteile[attribut].append(vorteil)
 
-        #Signals
-        self.widgetWert = {}
-        self.widgetKosten = {}
-        self.widgetPW = {}
-        for attribut in Definitionen.Attribute:
-            self.widgetWert[attribut] = getattr(self.ui, "spin" + attribut)
-            self.widgetKosten[attribut] = getattr(self.ui, "labelKosten" + attribut)
-            self.widgetPW[attribut] = getattr(self.ui, "pw" + attribut)
-            self.widgetWert[attribut].setKeyboardTracking(False)
-            self.widgetWert[attribut].valueChanged.connect(self.update)
-        self.ui.spinAsP.valueChanged.connect(self.update)
-        self.ui.spinKaP.valueChanged.connect(self.update)
+        # Init Attribute
+        self.widgetAttributVollerName = {}
+        self.widgetAttributName = {}
+        self.widgetAttributWert = {}
+        self.widgetAttributPW = {}
+        self.widgetAttributKosten = {}
+
+        rowIndex = 1
+        attribute = [a.name for a in sorted(Wolke.Char.attribute.values(), key=lambda value: value.sortorder)]
+        for attribut in attribute:
+            labelVollerName = QtWidgets.QLabel(Wolke.Char.attribute[attribut].anzeigename)
+            font=QtGui.QFont()
+            font.setBold(True)
+            labelVollerName.setFont(font)
+            labelVollerName.setToolTip(f"<html><head/><body><p>{Wolke.Char.attribute[attribut].text}</p></body></html>")
+            self.ui.gbAttribute.layout().addWidget(labelVollerName, rowIndex, 0)
+            self.widgetAttributVollerName[attribut] = labelVollerName
+
+            labelName = QtWidgets.QLabel(attribut)
+            font=QtGui.QFont()
+            font.setItalic(True)
+            labelName.setFont(font)
+            labelName.setAlignment(QtCore.Qt.AlignHCenter|QtCore.Qt.AlignVCenter)
+            self.ui.gbAttribute.layout().addWidget(labelName, rowIndex, 1)
+            self.widgetAttributName[attribut] = labelName
+            
+            spinWert = QtWidgets.QSpinBox()
+            spinWert.setKeyboardTracking(False)
+            spinWert.setButtonSymbols(QtWidgets.QAbstractSpinBox.PlusMinus)
+            spinWert.setAlignment(QtCore.Qt.AlignHCenter|QtCore.Qt.AlignVCenter)
+            spinWert.valueChanged.connect(self.update)
+            spinWert.setFixedWidth(Hilfsmethoden.emToPixels(6))
+            self.ui.gbAttribute.layout().addWidget(spinWert, rowIndex, 2)
+            self.widgetAttributWert[attribut] = spinWert
+            
+            spinPW = QtWidgets.QSpinBox() 
+            spinPW.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
+            spinPW.setAlignment(QtCore.Qt.AlignHCenter|QtCore.Qt.AlignVCenter)
+            spinPW.setReadOnly(True)
+            spinPW.setFocusPolicy(QtCore.Qt.NoFocus)
+            spinPW.setMaximum(999)
+            spinPW.setFixedWidth(Hilfsmethoden.emToPixels(6))
+            self.ui.gbAttribute.layout().addWidget(spinPW, rowIndex, 3)
+            self.widgetAttributPW[attribut] = spinPW
+
+            labelKosten = QtWidgets.QLabel()
+            self.ui.gbAttribute.layout().addWidget(labelKosten, rowIndex, 4)
+            self.widgetAttributKosten[attribut] = labelKosten
+
+            rowIndex += 1
+
+        # Init Abgeleitete Werte
+        self.widgetAbgeleitetVollerName = {}
+        self.widgetAbgeleitetName = {}
+        self.widgetAbgeleitetWert = {}
+        self.widgetAbgeleitetKosten = {}
+
+        rowIndex = 1
+        abgeleiteteWerte = [a.name for a in sorted(Wolke.Char.abgeleiteteWerte.values(), key=lambda value: value.sortorder) if a.anzeigen]
+        for ab in abgeleiteteWerte:
+            labelVollerName = QtWidgets.QLabel(Wolke.Char.abgeleiteteWerte[ab].anzeigename)
+            font=QtGui.QFont()
+            font.setBold(True)
+            labelVollerName.setFont(font)
+            labelVollerName.setToolTip(f"<html><head/><body><p>{Wolke.DB.abgeleiteteWerte[ab].text}</p></body></html>")
+            self.ui.gbAbgeleiteteWerte.layout().addWidget(labelVollerName, rowIndex, 0)
+            self.widgetAbgeleitetVollerName[ab] = labelVollerName
+
+            labelName = QtWidgets.QLabel(ab)
+            font=QtGui.QFont()
+            font.setItalic(True)
+            labelName.setFont(font)
+            labelName.setAlignment(QtCore.Qt.AlignHCenter|QtCore.Qt.AlignVCenter)
+            self.ui.gbAbgeleiteteWerte.layout().addWidget(labelName, rowIndex, 1)
+            self.widgetAbgeleitetName[ab] = labelName
+            
+            spinWert = QtWidgets.QSpinBox()
+            spinWert.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
+            spinWert.setAlignment(QtCore.Qt.AlignHCenter|QtCore.Qt.AlignVCenter)
+            spinWert.setReadOnly(True)
+            spinWert.setFocusPolicy(QtCore.Qt.NoFocus)
+            spinWert.setMinimum(-999)
+            spinWert.setMaximum(999)
+            spinWert.setFixedWidth(Hilfsmethoden.emToPixels(6))
+            self.ui.gbAbgeleiteteWerte.layout().addWidget(spinWert, rowIndex, 2)
+            self.widgetAbgeleitetWert[ab] = spinWert
+
+            labelFormel = QtWidgets.QLabel(Wolke.Char.abgeleiteteWerte[ab].formel)
+            self.ui.gbAbgeleiteteWerte.layout().addWidget(labelFormel, rowIndex, 3)
+            self.widgetAbgeleitetKosten[ab] = labelFormel
+
+            rowIndex += 1
+
+        # Init Energien (generate for all from db and toggle visibility because energien have voraussetzungen that might change)        
+        self.widgetEnergieVollerName = {}
+        self.widgetEnergieName = {}
+        self.widgetEnergieWert = {}
+        self.widgetEnergieSpinZugekauft = {}
+        self.widgetEnergieKosten = {}
+        self.widgetEnergieSpinGebunden = {}
+        self.widgetEnergieSpinGesamt = {}
+        
+        rowIndex = 1
+        energien = [e.name for e in sorted(Wolke.DB.energien.values(), key=lambda value: value.sortorder)]
+        for energie in energien:
+            labelVollerName = QtWidgets.QLabel(Wolke.DB.energien[energie].anzeigename)
+            labelVollerName.setVisible(False)
+            font=QtGui.QFont()
+            font.setBold(True)
+            labelVollerName.setFont(font)
+            labelVollerName.setToolTip(f"<html><head/><body><p>{Wolke.DB.energien[energie].text}</p></body></html>")
+            self.ui.gbEnergien.layout().addWidget(labelVollerName, rowIndex, 0)
+            self.widgetEnergieVollerName[energie] = labelVollerName
+
+            labelName = QtWidgets.QLabel(energie)
+            labelName.setVisible(False)
+            font=QtGui.QFont()
+            font.setItalic(True)
+            labelName.setFont(font)
+            labelName.setAlignment(QtCore.Qt.AlignHCenter|QtCore.Qt.AlignVCenter)
+            self.ui.gbEnergien.layout().addWidget(labelName, rowIndex, 1)
+            self.widgetEnergieName[energie] = labelName
+
+            spinWert = QtWidgets.QSpinBox()
+            spinWert.setVisible(False)
+            spinWert.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
+            spinWert.setAlignment(QtCore.Qt.AlignHCenter|QtCore.Qt.AlignVCenter)
+            spinWert.setReadOnly(True)
+            spinWert.setFocusPolicy(QtCore.Qt.NoFocus)
+            spinWert.setMaximum(999)
+            spinWert.setFixedWidth(Hilfsmethoden.emToPixels(6))
+            spinWert.valueChanged.connect(self.update)
+            self.ui.gbEnergien.layout().addWidget(spinWert, rowIndex, 2)
+            self.widgetEnergieWert[energie] = spinWert
+
+
+            spin = QtWidgets.QSpinBox()
+            spin.setVisible(False)
+            spin.setAlignment(QtCore.Qt.AlignHCenter|QtCore.Qt.AlignVCenter)
+            spin.setButtonSymbols(QtWidgets.QAbstractSpinBox.PlusMinus)
+            spin.setMaximum(999)
+            spin.setFixedWidth(Hilfsmethoden.emToPixels(6))
+            spin.valueChanged.connect(self.update)
+            self.ui.gbEnergien.layout().addWidget(spin, rowIndex, 3)
+            self.widgetEnergieSpinZugekauft[energie] = spin
+
+            labelKosten = QtWidgets.QLabel()
+            labelKosten.setVisible(False)
+            self.ui.gbEnergien.layout().addWidget(labelKosten, rowIndex, 4)
+            self.widgetEnergieKosten[energie] = labelKosten
+
+            spin = QtWidgets.QSpinBox()
+            spin.setVisible(False)
+            spin.setAlignment(QtCore.Qt.AlignHCenter|QtCore.Qt.AlignVCenter)
+            spin.setButtonSymbols(QtWidgets.QAbstractSpinBox.PlusMinus)
+            spin.setMaximum(999)
+            spin.setFixedWidth(Hilfsmethoden.emToPixels(6))
+            spin.valueChanged.connect(self.update)
+            spin.setSizePolicy(QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Fixed)
+            spin.setToolTip(f"Talente, die g{energie} erfordern, geben diese nach Beenden der Bindung wieder frei.\n"\
+                f"Bei vielen dieser Talente lohnt es sich aber, die Bindung langfristig aufrecht zu erhalten. Diese g{energie} kannst du hier eintragen.")
+            self.ui.gbEnergien.layout().addWidget(spin, rowIndex, 5, QtCore.Qt.AlignHCenter)
+            self.widgetEnergieSpinGebunden[energie] = spin
+
+            spin = QtWidgets.QSpinBox() 
+            spin.setVisible(False)
+            spin.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
+            spin.setAlignment(QtCore.Qt.AlignHCenter|QtCore.Qt.AlignVCenter)
+            spin.setReadOnly(True)
+            spin.setFocusPolicy(QtCore.Qt.NoFocus)
+            spin.setMaximum(999)
+            spin.setFixedWidth(Hilfsmethoden.emToPixels(6))
+            self.ui.gbEnergien.layout().addWidget(spin, rowIndex, 6)
+            self.widgetEnergieSpinGesamt[energie] = spin
+
+            rowIndex += 1
+
+        self.ui.labelEnergien.setVisible(False)
+        self.ui.gbEnergien.setVisible(False)
 
         self.currentlyLoading = False
      
@@ -61,66 +227,38 @@ class AttrWrapper(QtCore.QObject):
         tooltip = "Eine Steigerung von " + attribut + " auf " + str(attribute[attribut].wert) + " bewirkt:\n"
 
         abgeleitetNew = []
-        scriptAPI = { 'getAttribut' : lambda attribut: attribute[attribut].wert }
-        wsBasis = eval(Wolke.DB.einstellungen["Basis WS Script"].toText(), scriptAPI)
-        mrBasis = eval(Wolke.DB.einstellungen["Basis MR Script"].toText(), scriptAPI)
-        gsBasis = eval(Wolke.DB.einstellungen["Basis GS Script"].toText(), scriptAPI)
-        iniBasis = eval(Wolke.DB.einstellungen["Basis INI Script"].toText(), scriptAPI)
-        dhBasis = eval(Wolke.DB.einstellungen["Basis DH Script"].toText(), scriptAPI)
-        schadensbonusBasis = eval(Wolke.DB.einstellungen["Basis Schadensbonus Script"].toText(), scriptAPI)
-
-        scriptAPI = { 'getAttribut' : lambda attribut: Wolke.Char.attribute[attribut].wert }
-        wsBasis -= eval(Wolke.DB.einstellungen["Basis WS Script"].toText(), scriptAPI)
-        mrBasis -= eval(Wolke.DB.einstellungen["Basis MR Script"].toText(), scriptAPI)
-        gsBasis -= eval(Wolke.DB.einstellungen["Basis GS Script"].toText(), scriptAPI)
-        iniBasis -= eval(Wolke.DB.einstellungen["Basis INI Script"].toText(), scriptAPI)
-        dhBasis -= eval(Wolke.DB.einstellungen["Basis DH Script"].toText(), scriptAPI)
-        schadensbonusBasis -= eval(Wolke.DB.einstellungen["Basis Schadensbonus Script"].toText(), scriptAPI)
-
-        if wsBasis != 0:
-            abgeleitetNew.append("Wundschwelle " + ("+" if wsBasis > 0 else "") + str(wsBasis))
-        if mrBasis != 0:
-            abgeleitetNew.append("Magieresistenz " + ("+" if mrBasis > 0 else "") + str(mrBasis))
-        if gsBasis != 0:
-            abgeleitetNew.append("Geschwindigkeit " + ("+" if gsBasis > 0 else "") + str(gsBasis))
-        if iniBasis != 0:
-            abgeleitetNew.append("Initiative " + ("+" if iniBasis > 0 else "") + str(iniBasis))
-        if schadensbonusBasis != 0:
-            abgeleitetNew.append("Schadensbonus " + ("+" if schadensbonusBasis > 0 else "") + str(schadensbonusBasis))
-        if dhBasis != 0:
-            abgeleitetNew.append("Durchhaltevermögen " + ("+" if dhBasis > 0 else "") + str(dhBasis))
+        for aw in Wolke.Char.abgeleiteteWerte.values():
+            if not aw.anzeigen:
+                continue
+            diff = aw.diffBasiswert(attribute)
+            if diff != 0:
+                abgeleitetNew.append(aw.anzeigename + (" +" if diff > 0 else " ") + str(diff))
 
         vortNew = []
         if Wolke.Char.voraussetzungenPruefen:
             for vort in self.vorteile[attribut]:
                 if vort.name in Wolke.Char.vorteile:
                     continue
-                elif Hilfsmethoden.voraussetzungenPrüfen(Wolke.Char.vorteile, Wolke.Char.waffen, Wolke.Char.attribute, Wolke.Char.übernatürlicheFertigkeiten, Wolke.Char.fertigkeiten, vort.voraussetzungen):
+                elif Hilfsmethoden.voraussetzungenPrüfen(vort, Wolke.Char.vorteile, Wolke.Char.waffen, Wolke.Char.attribute, Wolke.Char.übernatürlicheFertigkeiten, Wolke.Char.fertigkeiten, Wolke.Char.talente):
                     continue
-                elif Hilfsmethoden.voraussetzungenPrüfen(Wolke.Char.vorteile, Wolke.Char.waffen, attribute, Wolke.Char.übernatürlicheFertigkeiten, Wolke.Char.fertigkeiten, vort.voraussetzungen):
+                elif Hilfsmethoden.voraussetzungenPrüfen(vort, Wolke.Char.vorteile, Wolke.Char.waffen, attribute, Wolke.Char.übernatürlicheFertigkeiten, Wolke.Char.fertigkeiten, Wolke.Char.talente):
                     vortNew.append(vort.name + " erwerbbar")
 
         fertNew = []
-        ferts = copy.deepcopy(Wolke.Char.fertigkeiten)
-        for fert in sorted(ferts.values(), key = lambda f: f.typ):
-            fert.aktualisieren(Wolke.Char.attribute)
-            basisAlt = fert.basiswert
-            fert.aktualisieren(attribute)
-            if basisAlt != fert.basiswert:
-                fertNew.append(fert.name + " +" + str(fert.basiswert - basisAlt))
+        for fert in sorted(Wolke.Char.fertigkeiten.values(), key = lambda f: f.kategorie):
+            diff = fert.diffBasiswert(attribute)
+            if diff != 0:
+                fertNew.append(fert.name + " +" + str(diff))
 
         fertsÜberNew = []
-        ferts = copy.deepcopy(Wolke.Char.übernatürlicheFertigkeiten)
         more = 0
-        for fert in sorted(ferts.values(), key = lambda f: f.typ):
+        for fert in sorted(Wolke.Char.übernatürlicheFertigkeiten.values(), key = lambda f: f.kategorie):
             if len(fert.gekaufteTalente) == 0:
                 more += 1
                 continue
-            fert.aktualisieren(Wolke.Char.attribute)
-            basisAlt = fert.basiswert
-            fert.aktualisieren(attribute)
-            if basisAlt != fert.basiswert:
-                fertsÜberNew.append(fert.name + " +" + str(fert.basiswert - basisAlt))
+            diff = fert.diffBasiswert(attribute)
+            if diff != 0:
+                fertsÜberNew.append(fert.name + " +" + str(diff))
         if more > 0:
             fertsÜberNew.append(str(more) + " ungenutzte übernat. Fertigkeiten +1")
 
@@ -136,7 +274,7 @@ class AttrWrapper(QtCore.QObject):
         else:
             tooltip = tooltip[:-2] + " keine weiteren Verbesserungen."
 
-        self.widgetWert[attribut].setToolTip(tooltip)
+        self.widgetAttributWert[attribut].setToolTip(tooltip)
 
     def checkConsequences(self, attribut, wert):
         attribute = copy.deepcopy(Wolke.Char.attribute)
@@ -150,15 +288,14 @@ class AttrWrapper(QtCore.QObject):
             messageBox.setText("Wenn du " + attribut + " auf " + str(wert) + " senkst, verlierst du die folgenden Vorteile:")
             remove.append("\nBist du sicher?")
             messageBox.setInformativeText("\n".join(remove))
-            messageBox.addButton("Ja", QtWidgets.QMessageBox.YesRole)
-            messageBox.addButton("Abbrechen", QtWidgets.QMessageBox.RejectRole)
+            messageBox.setStandardButtons(QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.Cancel)
             result = messageBox.exec()
-            return result == 0
+            return result == QtWidgets.QMessageBox.Yes
         return True
 
     def updateAttribut(self, attribut):
         changed = False
-        uiElement = self.widgetWert[attribut]
+        uiElement = self.widgetAttributWert[attribut]
         if Wolke.Char.attribute[attribut].wert != uiElement.value():
             if self.checkConsequences(attribut, uiElement.value()):
                 Wolke.Char.attribute[attribut].wert = uiElement.value()
@@ -166,9 +303,6 @@ class AttrWrapper(QtCore.QObject):
                 changed = True
             else:
                 uiElement.setValue(Wolke.Char.attribute[attribut].wert)
-
-            for attribut in Definitionen.Attribute:
-                self.updateTooltip(attribut)
 
         return changed
 
@@ -179,88 +313,90 @@ class AttrWrapper(QtCore.QObject):
         ''' Set and refresh all Attributes '''
         changed = False
 
-        for attribut in Definitionen.Attribute:
+        for attribut in Wolke.Char.attribute:
             if self.updateAttribut(attribut):
                 changed = True
 
-        if Wolke.Char.asp.wert != self.ui.spinAsP.value():
-            Wolke.Char.asp.wert = self.ui.spinAsP.value()
-            changed = True
+        for energie in Wolke.Char.energien:
+            if Wolke.Char.energien[energie].wert != self.widgetEnergieSpinZugekauft[energie].value():
+                Wolke.Char.energien[energie].wert = self.widgetEnergieSpinZugekauft[energie].value()
+                changed = True
 
-        if Wolke.Char.kap.wert != self.ui.spinKaP.value():
-            Wolke.Char.kap.wert = self.ui.spinKaP.value()
-            changed = True
+            if Wolke.Char.energien[energie].gebunden != self.widgetEnergieSpinGebunden[energie].value():
+                Wolke.Char.energien[energie].gebunden = self.widgetEnergieSpinGebunden[energie].value()
+                changed = True
 
         if changed:
             self.modified.emit()
-            self.updateDerivedValues()
+            for attribut in Wolke.Char.attribute:
+                self.updateTooltip(attribut)
+            self.updateAbgeleiteteWerte()
+            self.updateEnergien()
         
-    def getSteigerungskostenAsP(self):
-        val = (Wolke.Char.asp.wert + 1) * Wolke.Char.asp.steigerungsfaktor
-        return "(<span style='" + Wolke.FontAwesomeCSS + "'>\uf176</span>&nbsp;&nbsp;" + str(EventBus.applyFilter("asp_kosten", val, { "charakter" : Wolke.Char, "wert" : Wolke.Char.asp.wert })) + " EP)"
-
-    def getSteigerungskostenKaP(self):
-        val = (Wolke.Char.kap.wert + 1) * Wolke.Char.kap.steigerungsfaktor
-        return "(<span style='" + Wolke.FontAwesomeCSS + "'>\uf176</span>&nbsp;&nbsp;" + str(EventBus.applyFilter("asp_kosten", val, { "charakter" : Wolke.Char, "wert" : Wolke.Char.kap.wert })) + " EP)"
+    def getEnergieSteigerungskosten(self, energie):
+        en = Wolke.Char.energien[energie]
+        return "<span style='" + Wolke.FontAwesomeCSS + "'>\uf176</span>&nbsp;&nbsp;" + str(en.steigerungskosten()) + " EP"
 
     def getAttributSteigerungskosten(self, attr):
         attribut = Wolke.Char.attribute[attr]
-        val = (attribut.wert + 1) * attribut.steigerungsfaktor
-        return "<span style='" + Wolke.FontAwesomeCSS + "'>\uf176</span>&nbsp;&nbsp;" + str(EventBus.applyFilter("attribut_kosten", val, { "charakter" : Wolke.Char, "attribut" : attr, "wert" : attribut.wert + 1 })) + " EP"
+        return "<span style='" + Wolke.FontAwesomeCSS + "'>\uf176</span>&nbsp;&nbsp;" + str(attribut.steigerungskosten()) + " EP"
 
-    def updateDerivedValues(self):
-        for attribut in Definitionen.Attribute:
-            self.widgetPW[attribut].setValue(Wolke.Char.attribute[attribut].wert*2)
-            self.widgetKosten[attribut].setText(self.getAttributSteigerungskosten(attribut))
+    def updateAbgeleiteteWerte(self):
+        for attribut in Wolke.Char.attribute:
+            self.widgetAttributPW[attribut].setValue(Wolke.Char.attribute[attribut].probenwert)
+            self.widgetAttributKosten[attribut].setText(self.getAttributSteigerungskosten(attribut))
 
-        self.ui.abWS.setValue(Wolke.Char.ws)
-        self.ui.abGS.setValue(Wolke.Char.gs)
-        self.ui.abIN.setValue(Wolke.Char.ini)
-        self.ui.abMR.setValue(Wolke.Char.mr)
-        self.ui.abSB.setValue(Wolke.Char.schadensbonus)
-        self.ui.abDH.setValue(Wolke.Char.dh)
+        for ab in Wolke.Char.abgeleiteteWerte:
+            if not Wolke.Char.abgeleiteteWerte[ab].anzeigen:
+                continue
+            self.widgetAbgeleitetWert[ab].setValue(Wolke.Char.abgeleiteteWerte[ab].wert)
 
-        self.ui.labelKostenAsP.setText(self.getSteigerungskostenAsP())
-        self.ui.labelKostenKaP.setText(self.getSteigerungskostenKaP())
+        for en in Wolke.Char.energien:
+            self.widgetEnergieKosten[en].setText(self.getEnergieSteigerungskosten(en))
+
+    def updateEnergien(self):
+        for en in Wolke.DB.energien:
+            if en not in Wolke.Char.energien:
+                continue
+            energie = Wolke.Char.energien[en]
+            self.widgetEnergieSpinGebunden[en].setMaximum(energie.wertFinal)
+            self.widgetEnergieSpinGesamt[en].setValue(energie.wertAktuell)
 
     def load(self):
         self.currentlyLoading = True
 
-        ''' Load all values and derived values '''
-        for attribut in Definitionen.Attribute:
-            self.widgetWert[attribut].setValue(Wolke.Char.attribute[attribut].wert)
+        # Attribute
+        for attribut in Wolke.Char.attribute:
+            self.widgetAttributWert[attribut].setValue(Wolke.Char.attribute[attribut].wert)
             self.updateTooltip(attribut)
 
-        self.ui.abAsP.setValue(Wolke.Char.aspBasis + Wolke.Char.aspMod)
-        self.ui.abKaP.setValue(Wolke.Char.kapBasis + Wolke.Char.kapMod)
-        if "Zauberer I" in Wolke.Char.vorteile:
-            self.ui.spinAsP.setEnabled(True)
-            self.ui.spinAsP.setValue(Wolke.Char.asp.wert)
-        else:
-            self.ui.spinAsP.setValue(0)
-            self.ui.spinAsP.setEnabled(False)
+        #Abgeleitete Werte
+        self.updateAbgeleiteteWerte()
 
-        self.ui.lblKap.setText("KaP")
-        self.ui.lblKapZugekauft.setText("Karmaenergie")
-        self.ui.lblKapZugekauft.setToolTip("<html><head/><body><p>Als Geweihter stellt dir deine Gottheit Karmaenergie zur Verfügung: "\
-            "Die Vorteile Geweiht I/II/III/IV verleihen dir 8/16/24/32 Karmapunkte (KaP), die du für Liturgien nutzen kannst. "\
-            "Du kannst diesen Vorrat an maximalen KaP durch den Zukauf nach Steigerungsfaktor 1 erhöhen.</p></body></html>")
-        if "Geweiht I" in Wolke.Char.vorteile:
-            self.ui.spinKaP.setEnabled(True)
-            self.ui.spinKaP.setValue(Wolke.Char.kap.wert)
-        elif "Paktierer I" in Wolke.Char.vorteile:
-            self.ui.spinKaP.setEnabled(True)
-            self.ui.spinKaP.setValue(Wolke.Char.kap.wert)
-            self.ui.lblKap.setText("GuP")
-            self.ui.lblKapZugekauft.setText("Gunstpunkte")
-            self.ui.lblKapZugekauft.setToolTip("<html><head/><body><p>Ein Paktierer selbst verfügt nicht über übernatürliche Macht, sondern "\
-               "erbittet den Beistand seines Erzdämonen: Der Vorteil Paktierer I/II/III/IV verleiht ihm 8/16/24/32 Gunstpunkte (GuP), "\
-               "mit denen er den Erzdämon anrufen kann. GuP werden nach Steigerungsfaktor 1 gesteigert. Meist geschieht das, wenn der Paktierer "\
-               "ohnehin einen Kreis der Verdammnis aufsteigt oder dem Erzdämonen auf andere Weise nahe ist.</p></body></html>")
-        else:
-            self.ui.spinKaP.setValue(0)
-            self.ui.spinKaP.setEnabled(False)
+        # Energien
+        self.ui.labelEnergien.setVisible(len(Wolke.Char.energien) > 0)
+        self.ui.gbEnergien.setVisible(len(Wolke.Char.energien) > 0)
 
-        self.updateDerivedValues()
+        for col in range(self.ui.gbAttribute.layout().columnCount()):
+            width = max(self.ui.gbAttribute.layout().cellRect(0, col).width(),
+                        self.ui.gbEnergien.layout().cellRect(0, col).width())
+            self.ui.gbAttribute.layout().setColumnMinimumWidth(col, width)
+            self.ui.gbEnergien.layout().setColumnMinimumWidth(col, width)
+
+        for en in Wolke.DB.energien:
+            owned = en in Wolke.Char.energien
+            self.widgetEnergieVollerName[en].setVisible(owned)
+            self.widgetEnergieName[en].setVisible(owned)
+            self.widgetEnergieWert[en].setVisible(owned)
+            self.widgetEnergieSpinZugekauft[en].setVisible(owned)
+            self.widgetEnergieKosten[en].setVisible(owned)
+            self.widgetEnergieSpinGebunden[en].setVisible(owned)
+            self.widgetEnergieSpinGesamt[en].setVisible(owned)
+
+            if owned:
+                self.widgetEnergieWert[en].setValue(Wolke.Char.energien[en].basiswert + Wolke.Char.energien[en].mod)
+                self.widgetEnergieSpinZugekauft[en].setValue(Wolke.Char.energien[en].wert)
+                self.widgetEnergieSpinGebunden[en].setValue(Wolke.Char.energien[en].gebunden)
+        self.updateEnergien()
 
         self.currentlyLoading = False

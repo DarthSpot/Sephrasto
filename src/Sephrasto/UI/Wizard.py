@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'Wizard.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.4.2
+## Created by: Qt User Interface Compiler version 6.7.2
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -16,16 +16,16 @@ from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
     QImage, QKeySequence, QLinearGradient, QPainter,
     QPalette, QPixmap, QRadialGradient, QTransform)
 from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QGridLayout,
-    QHBoxLayout, QLabel, QPushButton, QRadioButton,
-    QSizePolicy, QSpacerItem, QVBoxLayout, QWidget)
+    QHBoxLayout, QLabel, QLineEdit, QPushButton,
+    QRadioButton, QSizePolicy, QSpacerItem, QWidget)
 
 class Ui_formMain(object):
     def setupUi(self, formMain):
         if not formMain.objectName():
             formMain.setObjectName(u"formMain")
         formMain.setWindowModality(Qt.ApplicationModal)
-        formMain.resize(506, 472)
-        sizePolicy = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        formMain.resize(611, 376)
+        sizePolicy = QSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(formMain.sizePolicy().hasHeightForWidth())
@@ -35,14 +35,67 @@ class Ui_formMain(object):
         self.gridLayout.setHorizontalSpacing(20)
         self.gridLayout.setVerticalSpacing(7)
         self.gridLayout.setContentsMargins(20, 20, 20, 20)
+        self.verticalSpacer_2 = QSpacerItem(20, 13, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
+
+        self.gridLayout.addItem(self.verticalSpacer_2, 2, 0, 1, 1)
+
+        self.label_3 = QLabel(formMain)
+        self.label_3.setObjectName(u"label_3")
+        font = QFont()
+        font.setBold(True)
+        self.label_3.setFont(font)
+
+        self.gridLayout.addWidget(self.label_3, 3, 0, 1, 1)
+
+        self.lblKultur = QLabel(formMain)
+        self.lblKultur.setObjectName(u"lblKultur")
+        self.lblKultur.setFont(font)
+
+        self.gridLayout.addWidget(self.lblKultur, 7, 0, 1, 1)
+
+        self.cbProfession = QComboBox(formMain)
+        self.cbProfession.setObjectName(u"cbProfession")
+
+        self.gridLayout.addWidget(self.cbProfession, 9, 1, 1, 1)
+
+        self.label_4 = QLabel(formMain)
+        self.label_4.setObjectName(u"label_4")
+
+        self.gridLayout.addWidget(self.label_4, 1, 0, 1, 1)
+
+        self.lblProfession = QLabel(formMain)
+        self.lblProfession.setObjectName(u"lblProfession")
+        self.lblProfession.setFont(font)
+
+        self.gridLayout.addWidget(self.lblProfession, 9, 0, 1, 1)
+
+        self.lblProfessionKategorie = QLabel(formMain)
+        self.lblProfessionKategorie.setObjectName(u"lblProfessionKategorie")
+        self.lblProfessionKategorie.setFont(font)
+
+        self.gridLayout.addWidget(self.lblProfessionKategorie, 8, 0, 1, 1)
+
+        self.lblSpezies = QLabel(formMain)
+        self.lblSpezies.setObjectName(u"lblSpezies")
+        self.lblSpezies.setFont(font)
+
+        self.gridLayout.addWidget(self.lblSpezies, 6, 0, 1, 1)
+
+        self.cbRegeln = QComboBox(formMain)
+        self.cbRegeln.setObjectName(u"cbRegeln")
+
+        self.gridLayout.addWidget(self.cbRegeln, 3, 1, 1, 1)
+
+        self.line = QFrame(formMain)
+        self.line.setObjectName(u"line")
+        self.line.setFrameShape(QFrame.Shape.HLine)
+        self.line.setFrameShadow(QFrame.Shadow.Sunken)
+
+        self.gridLayout.addWidget(self.line, 17, 0, 1, 2)
+
         self.horizontalLayout_3 = QHBoxLayout()
         self.horizontalLayout_3.setObjectName(u"horizontalLayout_3")
-        self.btnCancel = QPushButton(formMain)
-        self.btnCancel.setObjectName(u"btnCancel")
-
-        self.horizontalLayout_3.addWidget(self.btnCancel)
-
-        self.horizontalSpacer_2 = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.horizontalSpacer_2 = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
         self.horizontalLayout_3.addItem(self.horizontalSpacer_2)
 
@@ -55,170 +108,143 @@ class Ui_formMain(object):
         self.horizontalLayout_3.addWidget(self.btnAccept)
 
 
-        self.gridLayout.addLayout(self.horizontalLayout_3, 15, 0, 1, 2)
+        self.gridLayout.addLayout(self.horizontalLayout_3, 16, 0, 1, 2)
 
-        self.cbRegeln = QComboBox(formMain)
-        self.cbRegeln.setObjectName(u"cbRegeln")
-        self.cbRegeln.setMinimumSize(QSize(300, 0))
+        self.verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
 
-        self.gridLayout.addWidget(self.cbRegeln, 3, 1, 1, 1)
-
-        self.label = QLabel(formMain)
-        self.label.setObjectName(u"label")
-        self.label.setMinimumSize(QSize(0, 0))
-        font = QFont()
-        font.setPointSize(6)
-        self.label.setFont(font)
-        self.label.setInputMethodHints(Qt.ImhNone)
-        self.label.setTextFormat(Qt.RichText)
-        self.label.setWordWrap(True)
-        self.label.setOpenExternalLinks(True)
-
-        self.gridLayout.addWidget(self.label, 17, 0, 1, 2)
-
-        self.cbKultur = QComboBox(formMain)
-        self.cbKultur.setObjectName(u"cbKultur")
-
-        self.gridLayout.addWidget(self.cbKultur, 6, 1, 1, 1)
-
-        self.verticalLayout_2 = QVBoxLayout()
-        self.verticalLayout_2.setObjectName(u"verticalLayout_2")
-        self.label_2 = QLabel(formMain)
-        self.label_2.setObjectName(u"label_2")
-        self.label_2.setWordWrap(True)
-        self.label_2.setMargin(0)
-
-        self.verticalLayout_2.addWidget(self.label_2)
-
-
-        self.gridLayout.addLayout(self.verticalLayout_2, 0, 0, 1, 2)
-
-        self.lblGeschlecht = QLabel(formMain)
-        self.lblGeschlecht.setObjectName(u"lblGeschlecht")
-        font1 = QFont()
-        font1.setBold(True)
-        self.lblGeschlecht.setFont(font1)
-
-        self.gridLayout.addWidget(self.lblGeschlecht, 4, 0, 1, 1)
+        self.gridLayout.addItem(self.verticalSpacer, 12, 0, 1, 1)
 
         self.lblRegeln = QLabel(formMain)
         self.lblRegeln.setObjectName(u"lblRegeln")
         sizePolicy.setHeightForWidth(self.lblRegeln.sizePolicy().hasHeightForWidth())
         self.lblRegeln.setSizePolicy(sizePolicy)
-        self.lblRegeln.setFont(font1)
+        self.lblRegeln.setFont(font)
 
-        self.gridLayout.addWidget(self.lblRegeln, 3, 0, 1, 1)
+        self.gridLayout.addWidget(self.lblRegeln, 4, 0, 1, 1)
 
-        self.lblProfession = QLabel(formMain)
-        self.lblProfession.setObjectName(u"lblProfession")
-        self.lblProfession.setFont(font1)
+        self.label = QLabel(formMain)
+        self.label.setObjectName(u"label")
+        self.label.setMinimumSize(QSize(0, 0))
+        font1 = QFont()
+        font1.setPointSize(6)
+        self.label.setFont(font1)
+        self.label.setInputMethodHints(Qt.ImhNone)
+        self.label.setTextFormat(Qt.RichText)
+        self.label.setWordWrap(True)
+        self.label.setOpenExternalLinks(True)
 
-        self.gridLayout.addWidget(self.lblProfession, 8, 0, 1, 1)
+        self.gridLayout.addWidget(self.label, 18, 0, 1, 2)
 
-        self.lblProfessionKategorie = QLabel(formMain)
-        self.lblProfessionKategorie.setObjectName(u"lblProfessionKategorie")
-        self.lblProfessionKategorie.setFont(font1)
+        self.cbProfessionKategorie = QComboBox(formMain)
+        self.cbProfessionKategorie.setObjectName(u"cbProfessionKategorie")
 
-        self.gridLayout.addWidget(self.lblProfessionKategorie, 7, 0, 1, 1)
+        self.gridLayout.addWidget(self.cbProfessionKategorie, 8, 1, 1, 1)
+
+        self.lblGeschlecht = QLabel(formMain)
+        self.lblGeschlecht.setObjectName(u"lblGeschlecht")
+        self.lblGeschlecht.setFont(font)
+
+        self.gridLayout.addWidget(self.lblGeschlecht, 5, 0, 1, 1)
+
+        self.cbSpezies = QComboBox(formMain)
+        self.cbSpezies.setObjectName(u"cbSpezies")
+        self.cbSpezies.setMinimumSize(QSize(300, 0))
+
+        self.gridLayout.addWidget(self.cbSpezies, 6, 1, 1, 1)
+
+        self.cbBaukasten = QComboBox(formMain)
+        self.cbBaukasten.setObjectName(u"cbBaukasten")
+        self.cbBaukasten.setMinimumSize(QSize(300, 0))
+
+        self.gridLayout.addWidget(self.cbBaukasten, 4, 1, 1, 1)
 
         self.horizontalLayout = QHBoxLayout()
+        self.horizontalLayout.setSpacing(10)
         self.horizontalLayout.setObjectName(u"horizontalLayout")
-        self.horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
         self.horizontalLayout.addItem(self.horizontalSpacer)
 
-        self.btnWeiblich = QRadioButton(formMain)
-        self.btnWeiblich.setObjectName(u"btnWeiblich")
-        self.btnWeiblich.setChecked(True)
+        self.btnSkip = QRadioButton(formMain)
+        self.btnSkip.setObjectName(u"btnSkip")
+        self.btnSkip.setChecked(True)
 
-        self.horizontalLayout.addWidget(self.btnWeiblich)
+        self.horizontalLayout.addWidget(self.btnSkip)
 
         self.btnMaennlich = QRadioButton(formMain)
         self.btnMaennlich.setObjectName(u"btnMaennlich")
 
         self.horizontalLayout.addWidget(self.btnMaennlich)
 
+        self.btnWeiblich = QRadioButton(formMain)
+        self.btnWeiblich.setObjectName(u"btnWeiblich")
+        self.btnWeiblich.setChecked(False)
 
-        self.gridLayout.addLayout(self.horizontalLayout, 4, 1, 1, 1)
+        self.horizontalLayout.addWidget(self.btnWeiblich)
 
-        self.lblSpezies = QLabel(formMain)
-        self.lblSpezies.setObjectName(u"lblSpezies")
-        self.lblSpezies.setFont(font1)
+        self.btnDivers = QRadioButton(formMain)
+        self.btnDivers.setObjectName(u"btnDivers")
 
-        self.gridLayout.addWidget(self.lblSpezies, 5, 0, 1, 1)
+        self.horizontalLayout.addWidget(self.btnDivers)
 
-        self.cbSpezies = QComboBox(formMain)
-        self.cbSpezies.setObjectName(u"cbSpezies")
-        self.cbSpezies.setMinimumSize(QSize(300, 0))
+        self.leDivers = QLineEdit(formMain)
+        self.leDivers.setObjectName(u"leDivers")
 
-        self.gridLayout.addWidget(self.cbSpezies, 5, 1, 1, 1)
+        self.horizontalLayout.addWidget(self.leDivers)
 
-        self.verticalSpacer_2 = QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Fixed)
 
-        self.gridLayout.addItem(self.verticalSpacer_2, 1, 0, 1, 1)
+        self.gridLayout.addLayout(self.horizontalLayout, 5, 1, 1, 1)
 
-        self.line = QFrame(formMain)
-        self.line.setObjectName(u"line")
-        self.line.setFrameShape(QFrame.HLine)
-        self.line.setFrameShadow(QFrame.Sunken)
+        self.cbKultur = QComboBox(formMain)
+        self.cbKultur.setObjectName(u"cbKultur")
 
-        self.gridLayout.addWidget(self.line, 16, 0, 1, 2)
+        self.gridLayout.addWidget(self.cbKultur, 7, 1, 1, 1)
 
-        self.verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
-
-        self.gridLayout.addItem(self.verticalSpacer, 11, 0, 1, 1)
-
-        self.lblKultur = QLabel(formMain)
-        self.lblKultur.setObjectName(u"lblKultur")
-        self.lblKultur.setFont(font1)
-
-        self.gridLayout.addWidget(self.lblKultur, 6, 0, 1, 1)
-
-        self.cbProfessionKategorie = QComboBox(formMain)
-        self.cbProfessionKategorie.setObjectName(u"cbProfessionKategorie")
-
-        self.gridLayout.addWidget(self.cbProfessionKategorie, 7, 1, 1, 1)
-
-        self.cbProfession = QComboBox(formMain)
-        self.cbProfession.setObjectName(u"cbProfession")
-
-        self.gridLayout.addWidget(self.cbProfession, 8, 1, 1, 1)
-
-        QWidget.setTabOrder(self.cbRegeln, self.btnWeiblich)
-        QWidget.setTabOrder(self.btnWeiblich, self.btnMaennlich)
-        QWidget.setTabOrder(self.btnMaennlich, self.cbSpezies)
+        QWidget.setTabOrder(self.cbRegeln, self.cbBaukasten)
+        QWidget.setTabOrder(self.cbBaukasten, self.btnMaennlich)
+        QWidget.setTabOrder(self.btnMaennlich, self.btnDivers)
+        QWidget.setTabOrder(self.btnDivers, self.leDivers)
+        QWidget.setTabOrder(self.leDivers, self.cbSpezies)
         QWidget.setTabOrder(self.cbSpezies, self.cbKultur)
         QWidget.setTabOrder(self.cbKultur, self.cbProfessionKategorie)
         QWidget.setTabOrder(self.cbProfessionKategorie, self.cbProfession)
-        QWidget.setTabOrder(self.cbProfession, self.btnCancel)
-        QWidget.setTabOrder(self.btnCancel, self.btnAccept)
+        QWidget.setTabOrder(self.cbProfession, self.btnAccept)
 
         self.retranslateUi(formMain)
+
+        self.btnAccept.setDefault(True)
+
 
         QMetaObject.connectSlotsByName(formMain)
     # setupUi
 
     def retranslateUi(self, formMain):
         formMain.setWindowTitle(QCoreApplication.translate("formMain", u"Charakterassistent", None))
-        self.btnCancel.setText(QCoreApplication.translate("formMain", u"Ohne Assistent fortfahren", None))
-        self.btnAccept.setText(QCoreApplication.translate("formMain", u"\u00dcbernehmen", None))
-        self.label.setText(QCoreApplication.translate("formMain", u"<html><head/><body><p>Der Charakterassistent lebt von Communitybeitr\u00e4gen. Eigene Spezies/Kulturen/Professionen/Archetypen lassen sich spielend leicht erstellen. Finde hier heraus wie und teile deine Kreationen: <a href=\"https://dsaforum.de/viewtopic.php?f=180&amp;t=56703\"><span style=\" text-decoration: underline;\">Charakterassistent auf dsaforum.de</span></a></p></body></html>", None))
-        self.label.setProperty("class", QCoreApplication.translate("formMain", u"smallText", None))
-        self.label_2.setText(QCoreApplication.translate("formMain", u"Dieser Assistent betreut dich bei der Erstellung deines Charakters. Bei den Professionen sind manchmal Namen mitangegeben - dies sind vollwertige Archetypen mit Eigenheiten. Die angegebenen ben\u00f6tigten Erfahrungspunkte k\u00f6nnen niedriger oder h\u00f6her ausfallen.", None))
-        self.label_2.setProperty("class", QCoreApplication.translate("formMain", u"panel", None))
-        self.lblGeschlecht.setText(QCoreApplication.translate("formMain", u"Geschlecht", None))
-        self.lblGeschlecht.setProperty("class", QCoreApplication.translate("formMain", u"h4", None))
-        self.lblRegeln.setText(QCoreApplication.translate("formMain", u"Baukasten", None))
-        self.lblRegeln.setProperty("class", QCoreApplication.translate("formMain", u"h4", None))
+        self.label_3.setText(QCoreApplication.translate("formMain", u"Hausregeln", None))
+        self.label_3.setProperty("class", QCoreApplication.translate("formMain", u"h4", None))
+        self.lblKultur.setText(QCoreApplication.translate("formMain", u"Kultur", None))
+        self.lblKultur.setProperty("class", QCoreApplication.translate("formMain", u"h4", None))
+#if QT_CONFIG(tooltip)
+        self.cbProfession.setToolTip(QCoreApplication.translate("formMain", u"<html><head/><body><p>Hier sind manchmal Namen mitangegeben - dies sind vollwertige Archetypen mit Eigenheiten.</p></body></html>", None))
+#endif // QT_CONFIG(tooltip)
+        self.label_4.setText(QCoreApplication.translate("formMain", u"Neuer Charakter", None))
+        self.label_4.setProperty("class", QCoreApplication.translate("formMain", u"h2", None))
         self.lblProfession.setText(QCoreApplication.translate("formMain", u"Profession", None))
         self.lblProfession.setProperty("class", QCoreApplication.translate("formMain", u"h4", None))
         self.lblProfessionKategorie.setText(QCoreApplication.translate("formMain", u"Professionskategorie", None))
         self.lblProfessionKategorie.setProperty("class", QCoreApplication.translate("formMain", u"h4", None))
-        self.btnWeiblich.setText(QCoreApplication.translate("formMain", u"Weiblich", None))
-        self.btnMaennlich.setText(QCoreApplication.translate("formMain", u"M\u00e4nnlich", None))
         self.lblSpezies.setText(QCoreApplication.translate("formMain", u"Spezies", None))
         self.lblSpezies.setProperty("class", QCoreApplication.translate("formMain", u"h4", None))
-        self.lblKultur.setText(QCoreApplication.translate("formMain", u"Kultur", None))
-        self.lblKultur.setProperty("class", QCoreApplication.translate("formMain", u"h4", None))
+        self.btnAccept.setText(QCoreApplication.translate("formMain", u"\u00dcbernehmen", None))
+        self.lblRegeln.setText(QCoreApplication.translate("formMain", u"Baukasten", None))
+        self.lblRegeln.setProperty("class", QCoreApplication.translate("formMain", u"h4", None))
+        self.label.setText(QCoreApplication.translate("formMain", u"<html><head/><body><p>Der Charakterassistent lebt von Communitybeitr\u00e4gen. Wie du eigene Spezies/Kulturen/Professionen/Archetypen erstellen kannst, erf\u00e4hrst du in der Sephrasto-Hilfe.</p></body></html>", None))
+        self.label.setProperty("class", QCoreApplication.translate("formMain", u"smallText", None))
+        self.lblGeschlecht.setText(QCoreApplication.translate("formMain", u"Geschlecht", None))
+        self.lblGeschlecht.setProperty("class", QCoreApplication.translate("formMain", u"h4", None))
+        self.btnSkip.setText(QCoreApplication.translate("formMain", u"\u00dcberspringen", None))
+        self.btnMaennlich.setText(QCoreApplication.translate("formMain", u"M\u00e4nnlich", None))
+        self.btnWeiblich.setText(QCoreApplication.translate("formMain", u"Weiblich", None))
+        self.btnDivers.setText("")
     # retranslateUi
 

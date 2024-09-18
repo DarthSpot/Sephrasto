@@ -1,24 +1,63 @@
-_sephrasto_version_major = 3
-_sephrasto_version_minor = 5
-_sephrasto_version_build = 0
+_sephrasto_version_major = 5
+_sephrasto_version_minor = 0
+_sephrasto_version_build = 2
 
-def isClientSameOrHigher(major, minor, build):
-    if _sephrasto_version_major < major:
+_sephrasto_version = [_sephrasto_version_major, _sephrasto_version_minor, _sephrasto_version_build, 0]
+
+def isEqual(lh, rh):
+    return lh[0] == rh[0] and lh[1] == rh[1] and lh[2] == rh[2] and lh[3] == rh[3]
+
+def isHigher(lh, rh):
+    if rh[0] < lh[0]:
         return False
 
-    if _sephrasto_version_major > major:
+    if rh[0] > lh[0]:
         return True
 
-    if _sephrasto_version_minor < minor:
+    if rh[1] < lh[1]:
         return False
 
-    if _sephrasto_version_minor > minor:
+    if rh[1] > lh[1]:
         return True
 
-    return _sephrasto_version_build >= build
+    if rh[2] < lh[2]:
+        return False
 
-def isClientLower(major, minor, build):
-    return not isClientSameOrHigher(major, minor, build)
+    if rh[2] > lh[2]:
+        return True
 
-def toString():
-    return f"{_sephrasto_version_major}.{_sephrasto_version_minor}.{_sephrasto_version_build}"
+    return rh[3] > lh[3]
+
+def isLower(lh, rh):
+    return not isEqual(lh, rh) and not isHigher(lh, rh)
+
+def stripPluginVersion(version):
+    stripped = version.copy()
+    stripped[3] = 0
+    return stripped
+
+def isClientSame(version):
+    return isEqual(version, _sephrasto_version)
+
+def isClientHigher(version):
+    return isHigher(version, _sephrasto_version)
+
+def isClientLower(version):
+    return isLower(version, _sephrasto_version)
+
+def fromString(version):
+    if version.startswith("v"):
+        version = version[1:]
+    version = [int(s) for s in version.split(".")]
+    while len(version) < 4:
+        version.append(0)
+    return version
+
+def toString(version):
+    version = ".".join([str(v) for v in version])
+    while version.endswith(".0"):
+        version = version[:-2]
+    return version
+
+def clientToString():
+    return f"v{_sephrasto_version_major}.{_sephrasto_version_minor}.{_sephrasto_version_build}"

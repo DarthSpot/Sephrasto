@@ -27,9 +27,13 @@ import logging
 from EventBus import EventBus
 from shutil import which
 from EinstellungenWrapper import EinstellungenWrapper
-from CharakterAssistent import WizardWrapper
-from UI import Wizard
+from UI import CharakterMain
 import platform
+from CharakterAssistent.CharakterMerger import CharakterMerger
+import base64
+from QtUtils.ProgressDialogExt import ProgressDialogExt
+from QtUtils.RichTextButton import RichTextPushButton, RichTextToolButton
+from functools import partial
 
 class Tab():
     def __init__(self, order, wrapper, form, name):
@@ -43,90 +47,174 @@ class Editor(object):
     Main class for the character editing window. Mostly puts together the
     different parts of the GUI and handles the communication inbetween.
     '''
-    def __init__(self, plugins, savePathUpdatedCallback, CharacterName=""):
+
+    def __init__(self, plugins, onCloseCB, savePathUpdatedCallback):
         super().__init__()
         self.plugins = plugins
-        self.savepath = CharacterName
-
-        hausregeln = Wolke.Settings['Datenbank']
-        if self.savepath:
-            tmp = Charakter.Char.xmlHausregelnLesen(self.savepath)
-            if tmp is None:
-                hausregeln = ""
-            elif tmp in EinstellungenWrapper.getDatenbanken(Wolke.Settings["Pfad-Regeln"]):
-                hausregeln = tmp if tmp != "Keine" else ""
-
-        Wolke.DB = Datenbank.Datenbank(hausregeln)
-        self.pdfExporter = PdfExporter.PdfExporter()
-
-        self.changed = False
+        self.enabledPlugins = []
+        self.onCloseCB = onCloseCB
         self.savePathUpdatedCallback = savePathUpdatedCallback
-        if Wolke.DB.loaded:
-            self.noDatabase = False
-            self.finishInit()
-        else:
-            self.noDatabase = True
+        self.savepath = ""
+        self.changed = False
+        self.pdfExporter = PdfExporter.PdfExporter()
+        Wolke.DB = Datenbank.Datenbank()
+
+    def loadCharacter(self, path):
+        try:
+            dlg = ProgressDialogExt(minimum = 0, maximum = 100)
+            dlg.disableCancel()
+            dlg.setWindowTitle("Charakter laden")    
+            dlg.show()
+            dlg.setLabelText("Lade Datenbank")
+            dlg.setValue(0, True)
+            self.savepath = path
+            storedHausregeln = Charakter.Char.hausregelnLesen(self.savepath)
+            availableHausregeln = EinstellungenWrapper.getDatenbanken(Wolke.Settings["Pfad-Regeln"])
         
-    def finishInit(self):
-        Wolke.Char = Charakter.Char()
+            dlg.setValue(10, True)
+            if storedHausregeln in availableHausregeln:
+                hausregeln = storedHausregeln
+            else:
+                messagebox = QtWidgets.QMessageBox()
+                messagebox.setWindowTitle("Hausregeln nicht gefunden!")
+                messagebox.setText(f"Der Charakter wurde mit den Hausregeln {storedHausregeln} erstellt. Die Datei konnte nicht gefunden werden.\n\n"\
+                    "Bitte wähle aus, mit welchen Hausregeln der Charakter stattdessen geladen werden soll.")
+                messagebox.setIcon(QtWidgets.QMessageBox.Critical )
+                messagebox.setStandardButtons(QtWidgets.QMessageBox.Ok)
+                messagebox.setWindowFlags(QtCore.Qt.CustomizeWindowHint | QtCore.Qt.WindowTitleHint)
+                combo = QtWidgets.QComboBox()
+                combo.addItems(availableHausregeln)
+                messagebox.layout().addWidget(combo, 1, 2)
+                messagebox.exec()
+                hausregeln = combo.currentText()
 
-        if self.savepath:
-            Wolke.Char.xmlLesen(self.savepath)
-        else:
-            self.showCharacterWizard()
+            self.loadDB(hausregeln)
 
-        enabledPlugins = []
+            dlg.setLabelText("Lade Charakter")
+            dlg.setValue(40, True)
+            Wolke.Char = Charakter.Char()
+            success, loadResult = Wolke.Char.loadFile(self.savepath)
+            if loadResult[0] != Wolke.Char.LoadResultNone:
+                messageBox = QtWidgets.QMessageBox()
+                icon = { 1 : QtWidgets.QMessageBox.Information, 2 : QtWidgets.QMessageBox.Warning, 3 : QtWidgets.QMessageBox.Critical }
+                messageBox.setIcon(icon[loadResult[0]])
+                messageBox.setWindowTitle(loadResult[1])
+                messageBox.setText(loadResult[2])
+                messageBox.setStandardButtons(QtWidgets.QMessageBox.Ok)
+                messageBox.setEscapeButton(QtWidgets.QMessageBox.Close)  
+                messageBox.exec()
+
+            if not success:
+                self.savepath = ""
+
+            dlg.setValue(70, True)    
+            missingPlugins = set(Wolke.Char.enabledPlugins) - set(self.enabledPlugins)
+            if len(missingPlugins) > 0:
+                infoBox = QtWidgets.QMessageBox()
+                infoBox.setIcon(QtWidgets.QMessageBox.Warning)
+                infoBox.setWindowTitle("Plugin fehlt!")
+                infoBox.setText("Der Charakter wurde mit einem oder mehreren Plugins erstellt, die seine Werte beeinflussen. "\
+                "Nicht alle davon sind aktiv, daher können beim Speichern Daten dieser Plugins verloren gehen:\n\n" + ", ".join(missingPlugins))
+                infoBox.setStandardButtons(QtWidgets.QMessageBox.Ok)
+                infoBox.setEscapeButton(QtWidgets.QMessageBox.Close)  
+                infoBox.exec()
+
+            Wolke.Char.enabledPlugins = self.enabledPlugins.copy()
+            Wolke.Char.aktualisieren() # A bit later because it needs access to itself
+
+            dlg.setLabelText("Starte Editor")
+            dlg.setValue(80, True)
+            self.show()
+        finally:
+            dlg.hide()
+            dlg.deleteLater()
+
+    def newCharacter(self):
+        try:
+            dlg = ProgressDialogExt(minimum = 0, maximum = 100)
+            dlg.disableCancel()
+            dlg.setWindowTitle("Neuen Charakter erstellen")    
+            dlg.show()
+            dlg.setLabelText("Lade Datenbank")
+            dlg.setValue(0, True)
+            self.loadDB(Wolke.Settings['Datenbank'])
+
+            dlg.setLabelText("Erstelle Charakter")
+            dlg.setValue(40, True)
+            Wolke.Char = Charakter.Char()
+            Wolke.Char.enabledPlugins = self.enabledPlugins.copy()
+            Wolke.Char.aktualisieren() # A bit later because it needs access to itself
+            dlg.setLabelText("Starte Editor")
+            dlg.setValue(80, True)
+            self.show()
+        finally:
+            dlg.hide()
+            dlg.deleteLater()
+
+    def newCharacterFromWizard(self, wizardConfig):
+        try:
+            dlg = ProgressDialogExt(minimum = 0, maximum = 100)
+            dlg.disableCancel()
+            dlg.setWindowTitle("Neuen Charakter erstellen")    
+            dlg.show()
+            dlg.setLabelText("Lade Datenbank")
+            dlg.setValue(0, True)
+
+            self.loadDB(wizardConfig.hausregeln)
+
+            dlg.setLabelText("Erstelle Charakter")
+            dlg.setValue(40, True)
+            Wolke.Char = Charakter.Char()
+            wizardConfig.apply(Wolke.Char, Wolke.DB)
+            Wolke.Char.enabledPlugins = self.enabledPlugins.copy()
+            Wolke.Char.aktualisieren() # A bit later because it needs access to itself
+
+            dlg.setLabelText("Starte Editor")
+            dlg.setValue(80, True)
+            self.show()
+        finally:
+            dlg.hide()
+            dlg.deleteLater()
+
+    def loadDB(self, hausregeln):
+        if Wolke.DB.datei is None or Wolke.DB.hausregelDatei != hausregeln:
+            if not Wolke.DB.loadFile(hausregeln = hausregeln, isCharakterEditor = True):
+                messagebox = QtWidgets.QMessageBox()
+                messagebox.setWindowTitle("Fehler!")
+                messagebox.setText(hausregeln + " ist keine valide Datenbank-Datei! Der Charaktereditor wird ohne Hausregeln gestartet.")
+                messagebox.setIcon(QtWidgets.QMessageBox.Critical)  
+                messagebox.setStandardButtons(QtWidgets.QMessageBox.Ok)
+                messagebox.exec()
+        self.enabledPlugins = []
         for pluginData in self.plugins:
             if pluginData.plugin is not None and hasattr(pluginData.plugin, "changesCharacter") and pluginData.plugin.changesCharacter():
-                enabledPlugins.append(pluginData.name)
+                self.enabledPlugins.append(pluginData.name)
+
+    def show(self):
+        self.form = QtWidgets.QWidget()
+        self.ui = CharakterMain.Ui_formMain()
+        self.ui.setupUi(self.form)
+        self.ui.tabs.removeTab(0)
+        self.ui.tabs.removeTab(0)
         
-        missingPlugins = set(Wolke.Char.enabledPlugins) - set(enabledPlugins)
-        if len(missingPlugins) > 0:
-            infoBox = QtWidgets.QMessageBox()
-            infoBox.setIcon(QtWidgets.QMessageBox.Warning)
-            infoBox.setWindowTitle("Plugin fehlt!")
-            infoBox.setText("Der Charakter wurde mit einem oder mehreren Plugins erstellt, die seine Werte beeinflussen. "\
-            "Nicht alle davon sind aktiv, daher können beim Speichern Daten dieser Plugins verloren gehen:\n\n" + ", ".join(missingPlugins))
-            infoBox.setStandardButtons(QtWidgets.QMessageBox.Ok)
-            infoBox.setEscapeButton(QtWidgets.QMessageBox.Close)  
-            infoBox.exec()
-
-        Wolke.Char.enabledPlugins = enabledPlugins
-
-        Wolke.Char.aktualisieren() # A bit later because it needs access to itself
-        
-    def wheelEvent(self, ev):
-        if ev.type() == QtCore.QEvent.Wheel:
-            if not self.ui.scrollArea.hasFocus():
-                ev.ignore()
-
-    def setupMainForm(self):
         windowSize = Wolke.Settings["WindowSize-Charakter"]
         self.form.resize(windowSize[0], windowSize[1])
 
         self.ui.scrollArea.wheelEvent = self.wheelEvent
 
-        self.ui.progressBar.setVisible(False)
         self.updateEP()
 
         tabs = []
 
-        details = False
-        for bogen in Wolke.Charakterbögen:
-            if Wolke.Char.charakterbogen == os.path.basename(os.path.splitext(bogen)[0]):
-                details = Wolke.Charakterbögen[bogen].beschreibungDetails
-                break
+        beschrWrapper = EventBus.applyFilter("class_beschreibung_wrapper", CharakterBeschreibungWrapper.BeschrWrapper)
+        if beschrWrapper:
+            self.beschrWrapper = beschrWrapper()
+            tabs.append(Tab(0, self.beschrWrapper, self.beschrWrapper.form, "Beschreibung"))
 
-        if details:
-            beschrWrapper = EventBus.applyFilter("class_beschreibungdetails_wrapper", CharakterBeschreibungDetailsWrapper.CharakterBeschreibungDetailsWrapper)
-            if beschrWrapper:
-                self.beschrWrapper = beschrWrapper()
-                tabs.append(Tab(10, self.beschrWrapper, self.beschrWrapper.form, "Beschreibung"))
-        else:
-            beschrWrapper = EventBus.applyFilter("class_beschreibung_wrapper", CharakterBeschreibungWrapper.BeschrWrapper)
-            if beschrWrapper:
-                self.beschrWrapper = beschrWrapper()
-                tabs.append(Tab(10, self.beschrWrapper, self.beschrWrapper.form, "Beschreibung"))
+        detailsWrapper = EventBus.applyFilter("class_beschreibungdetails_wrapper", CharakterBeschreibungDetailsWrapper.CharakterBeschreibungDetailsWrapper)
+        if detailsWrapper:
+            self.beschrDetailsWrapper = detailsWrapper()
+            tabs.append(Tab(10, self.beschrDetailsWrapper, self.beschrDetailsWrapper.form, "Hintergrund"))
 
         attrWrapper = EventBus.applyFilter("class_attribute_wrapper", CharakterAttributeWrapper.AttrWrapper)
         if attrWrapper:
@@ -153,6 +241,32 @@ class Editor(object):
             self.infoWrapper = infoWrapper()
             tabs.append(Tab(70, self.infoWrapper, self.infoWrapper.form, "Info"))
 
+        self.ui.buttonQuicksave = RichTextToolButton()
+        self.ui.buttonQuicksave.setText("&nbsp;<span style='" + Wolke.FontAwesomeCSS + f"'>\uf0c7</span>&nbsp;&nbsp;Speichern")
+        self.ui.buttonQuicksave.setShortcut("Ctrl+S")
+        self.ui.buttonQuicksave.setToolTip("Charakterdatei speichern (" + self.ui.buttonQuicksave.shortcut().toString(QtGui.QKeySequence.NativeText) + ")")
+        self.ui.buttonQuicksave.clicked.connect(self.quicksaveButton)
+        self.ui.layoutBottomBar.addWidget(self.ui.buttonQuicksave)
+        self.ui.buttonQuicksave.setPopupMode(QtWidgets.QToolButton.MenuButtonPopup)
+        self.saveMenu = QtWidgets.QMenu()
+        action = self.saveMenu.addAction("Speichern unter...")
+        action.setShortcut("Ctrl+Shift+S")
+        action.triggered.connect(self.saveButton)
+        self.ui.buttonQuicksave.setMenu(self.saveMenu)
+
+        self.ui.buttonSavePDF = RichTextToolButton()
+        self.ui.buttonSavePDF.setText("<span style='" + Wolke.FontAwesomeCSS + f"'>\uf1c1</span>&nbsp;&nbsp;Export")
+        self.ui.buttonSavePDF.setShortcut("Ctrl+E")
+        self.ui.buttonSavePDF.setToolTip("Charakter mit dem gewählten Charakterbogen als PDF exportieren (" + self.ui.buttonSavePDF.shortcut().toString(QtGui.QKeySequence.NativeText) + ")")
+        self.ui.buttonSavePDF.clicked.connect(partial(self.pdfButton, bogen=None))
+        self.ui.layoutBottomBar.addWidget(self.ui.buttonSavePDF)
+        self.ui.buttonSavePDF.setPopupMode(QtWidgets.QToolButton.MenuButtonPopup)
+        self.exportMenu = QtWidgets.QMenu()
+        for bogen in Wolke.Charakterbögen:
+            action = self.exportMenu.addAction(bogen)
+            action.triggered.connect(partial(self.pdfButton, bogen=bogen))
+        self.ui.buttonSavePDF.setMenu(self.exportMenu)
+
         for pd in self.plugins:
             if pd.plugin is None:
                 continue
@@ -163,7 +277,7 @@ class Editor(object):
 
             if hasattr(pd.plugin, "createCharakterButtons"):
                 for button in pd.plugin.createCharakterButtons():
-                    self.ui.horizontalLayout_2.addWidget(button)
+                    self.ui.layoutBottomBar.addWidget(button)
 
         self.tabs = sorted(tabs, key=lambda tab: tab.order)
         for tab in self.tabs:
@@ -176,42 +290,126 @@ class Editor(object):
 
         self.ui.tabs.setStyleSheet('QTabBar { font-weight: bold; font-size: ' + str(Wolke.FontHeadingSizeL1) + 'pt; font-family: \"' + Wolke.Settings["FontHeading"] + '\"; }')
         self.ui.tabs.currentChanged.connect(lambda idx : self.reload(idx))
-        self.ui.buttonSave.clicked.connect(self.saveButton)
-        self.ui.buttonQuicksave.clicked.connect(self.quicksaveButton)
-        self.ui.buttonSavePDF.clicked.connect(self.pdfButton)
+        self.updateDetailsVisibility()
+
         self.ui.spinEP.valueChanged.connect(self.epChanged)
 
         self.reload(self.ui.tabs.currentIndex())
 
+        # Add shortcuts for tab cycling
+        # QTabWidget has this builtin but it only works in certain conditions, probably some focus issue
+        self.shortcutNextTab = QtGui.QAction() 
+        self.shortcutNextTab.setShortcut("Ctrl+Tab")
+        self.shortcutNextTab.triggered.connect(self.nextTab)
+        self.ui.tabs.addAction(self.shortcutNextTab)
+
+        self.shortcutPrevTab = QtGui.QAction()
+        self.shortcutPrevTab.setShortcut("Ctrl+Shift+Tab")
+        self.shortcutPrevTab.triggered.connect(self.previousTab)
+        self.ui.tabs.addAction(self.shortcutPrevTab)
+
         self.form.closeEvent = self.closeEvent
+        self.form.show()
         
+    def nextTab(self):
+        index = self.ui.tabs.currentIndex() + 1
+        if index >= self.ui.tabs.count():
+            index = 0
+        while not self.ui.tabs.isTabVisible(index):
+            index += 1
+            if index >= self.ui.tabs.count():
+                index = 0
+
+        self.ui.tabs.setCurrentIndex(index)
+
+    def previousTab(self):
+        index = self.ui.tabs.currentIndex() - 1
+        if index < 0:
+            index = self.ui.tabs.count() - 1
+        while not self.ui.tabs.isTabVisible(index):
+            index -= 1
+            if index < 0:
+                index = self.ui.tabs.count()-1
+
+        self.ui.tabs.setCurrentIndex(index)
+
+    def wheelEvent(self, ev):
+        if ev.type() == QtCore.QEvent.Wheel:
+            if not self.ui.scrollArea.hasFocus():
+                ev.ignore()
+
     def cancelDueToPendingChanges(self, action):
         if self.changed:
             messagebox = QtWidgets.QMessageBox()
             messagebox.setWindowTitle(action)
             messagebox.setText("Sollen die ausstehenden Änderungen gespeichert werden?")
             messagebox.setIcon(QtWidgets.QMessageBox.Question)
-            messagebox.addButton("Ja", QtWidgets.QMessageBox.YesRole)
-            messagebox.addButton("Nein", QtWidgets.QMessageBox.NoRole)
-            messagebox.addButton("Abbrechen", QtWidgets.QMessageBox.RejectRole)
+            messagebox.setStandardButtons(QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No | QtWidgets.QMessageBox.Cancel)
             result = messagebox.exec()
-            if result == 0:
+            if result == QtWidgets.QMessageBox.Yes:
                 self.quicksaveButton()
-            elif result == 2:
+            elif result == QtWidgets.QMessageBox.Cancel:
                 return True
         return False
+
+    def addRecentChar(self):
+        if not self.savepath:
+            return
+
+        for r in Wolke.Settings['Letzte-Chars']:
+            if r["path"] == self.savepath:
+                Wolke.Settings['Letzte-Chars'].remove(r)
+                if self.changed:
+                    Wolke.Settings['Letzte-Chars'].insert(0, r)
+                    return
+                break
+
+        recent = {}
+        recent["path"] = self.savepath
+        recent["hausregeln"] = Wolke.DB.hausregelnAnzeigeName
+        if Wolke.Char.name:
+            recent["name"] = Wolke.Char.name
+        else:
+            recent["name"] = os.path.splitext(os.path.basename(self.savepath))[0]
+  
+        recent["epGesamt"] = Wolke.Char.epGesamt
+
+        if Wolke.Char.bild:
+            pixmap = QtGui.QPixmap()
+            pixmap.loadFromData(Wolke.Char.bild)     
+            pixmap = pixmap.scaledToWidth(Wolke.CharImageSize[0]/5)  
+            buffer = QtCore.QBuffer()
+            buffer.open(QtCore.QIODevice.WriteOnly)
+            pixmap.save(buffer, "PNG")
+            recent["bild"] = base64.b64encode(buffer.data().data())
+
+        Wolke.Settings['Letzte-Chars'].insert(0, recent)
+        if len(Wolke.Settings['Letzte-Chars']) > 32:
+            Wolke.Settings['Letzte-Chars'].pop()
+
 
     def closeEvent(self,event):
         self.form.setFocus() #make sure editingfinished is called on potential line edits in focus
         if self.cancelDueToPendingChanges("Beenden"):
             event.ignore()
         else:
+            self.addRecentChar()
             Wolke.Settings["WindowSize-Charakter"] = [self.form.size().width(), self.form.size().height()]
+            Wolke.Char = None
+            Wolke.DB = None
+            self.onCloseCB()
     
     def onModified(self):
         self.changed = True
         Wolke.Char.aktualisieren()
         self.updateEP()
+        self.updateDetailsVisibility()
+
+    def updateDetailsVisibility(self):
+        if hasattr(self, "beschrDetailsWrapper"):
+            self.ui.tabs.setTabVisible(self.ui.tabs.indexOf(self.beschrDetailsWrapper.form), Wolke.Char.detailsAnzeigen)
+            if hasattr(self, "beschrWrapper"):
+                self.beschrWrapper.onDetailsVisibilityChanged(Wolke.Char.detailsAnzeigen)
 
     def updateEP(self):
         self.ui.spinEP.setValue(Wolke.Char.epGesamt)
@@ -271,58 +469,23 @@ Versuchs doch bitte nochmal mit einer anderen Zieldatei.")
         if self.savepath == "":
             self.saveButton()
         else:
-            Wolke.Char.xmlSchreiben(self.savepath)
+            Wolke.Char.saveFile(self.savepath)
 
         self.changed = False
 
-
-    def showCharacterWizard(self):
-        if not Wolke.Settings['Charakter-Assistent']:
-            return
-
-        self.wizardEd = WizardWrapper.WizardWrapper()
-        self.wizardEd.form = QtWidgets.QDialog()
-        self.wizardEd.form .setWindowFlags(
-                QtCore.Qt.Window |
-                QtCore.Qt.CustomizeWindowHint |
-                QtCore.Qt.WindowTitleHint |
-                QtCore.Qt.WindowCloseButtonHint)
-
-        self.wizardEd.ui = Wizard.Ui_formMain()
-        self.wizardEd.ui.setupUi(self.wizardEd.form)
-        self.wizardEd.setupMainForm()
-        self.wizardEd.form.setWindowModality(QtCore.Qt.ApplicationModal)
-        self.wizardEd.form.show()
-        self.wizardEd.form.exec()
-
-    def showProgressBar(self, show):
-        if show:
-            QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
-        else:
-            QApplication.restoreOverrideCursor()
-
-        self.ui.tabs.setEnabled(not show)
-        self.ui.spinEP.setEnabled(not show)
-        self.ui.spinRemaining.setEnabled(not show)
-        self.ui.spinSpent.setEnabled(not show)
-        for i in range(7, self.ui.horizontalLayout_2.count()): 
-            self.ui.horizontalLayout_2.itemAt(i).widget().setVisible(not show)
-        self.ui.progressBar.setVisible(show)
-      
-    def pdfExporterProgressCallback(self, progress):
-        self.ui.progressBar.setValue(progress)
-        QtWidgets.QApplication.processEvents() #make sure the gui doesnt freeze
-
-    def pdfButton(self):
+    def pdfButton(self, bogen = None):
         if which("pdftk") is None:
             messagebox = QtWidgets.QMessageBox()
+            messagebox.setTextFormat(QtCore.Qt.RichText)
             messagebox.setWindowTitle("PDFtk ist nicht installiert!")
-            message = "Sephrasto benötigt PDFtk für den PDF-Export. Hier kannst du es kostenlos herunterladen:\n"
+            message = "Sephrasto benötigt PDFtk Server für den PDF-Export.<br>"
 
-            if platform.system() != "Darwin":
-                message += "https://www.pdflabs.com/tools/pdftk-server/"
+            if platform.system() == 'Windows':
+                message += "Hier kannst du es kostenlos herunterladen:<br><br><a href='https://www.pdflabs.com/tools/pdftk-the-pdf-toolkit/pdftk_server-2.02-win-setup.exe'>Setupdatei von www.pdflabs.com</a>"
+            elif platform.system() == 'Darwin':
+                message += "Hier kannst du es kostenlos herunterladen:<br><br><a href='https://www.pdflabs.com/tools/pdftk-the-pdf-toolkit/pdftk_server-2.02-mac_osx-10.11-setup.pkg'>Setupdatei von www.pdflabs.com</a><br><br>Bitte exakt diese Version, neuere Versionen sind fehlerhaft!"
             else:
-                message += "https://www.pdflabs.com/tools/pdftk-the-pdf-toolkit/pdftk_server-2.02-mac_osx-10.11-setup.pkg \n\nBitte exakt diese Version!"
+                message += "Bitte installiere es gemäß der Anleitung auf <a href='https://github.com/Aeolitus/Sephrasto'>GitHub</a>"
             messagebox.setText(message)
             messagebox.setIcon(QtWidgets.QMessageBox.Critical)
             messagebox.setStandardButtons(QtWidgets.QMessageBox.Ok)
@@ -331,10 +494,13 @@ Versuchs doch bitte nochmal mit einer anderen Zieldatei.")
         
         result = -1
 
-        for bogen in Wolke.Charakterbögen:
-            if Wolke.Char.charakterbogen == os.path.basename(os.path.splitext(bogen)[0]):
-                self.pdfExporter.setCharakterbogen(EventBus.applyFilter("set_charakterbogen", Wolke.Charakterbögen[bogen]))
-                break
+        if bogen is None:
+            for bogen in Wolke.Charakterbögen:
+                if Wolke.Char.charakterbogen == os.path.basename(os.path.splitext(bogen)[0]):
+                    self.pdfExporter.setCharakterbogen(EventBus.applyFilter("set_charakterbogen", Wolke.Charakterbögen[bogen]))
+                    break
+        else:
+            self.pdfExporter.setCharakterbogen(EventBus.applyFilter("set_charakterbogen", Wolke.Charakterbögen[bogen]))
 
         # Check if there is a base Charakterbogen.pdf:
         if not os.path.isfile(self.pdfExporter.CharakterBogen.filePath):
@@ -362,10 +528,4 @@ Versuchs doch bitte nochmal mit einer anderen Zieldatei.")
         if ".pdf" not in spath:
             spath = spath + ".pdf"
             
-        try:
-            self.showProgressBar(True)
-            self.pdfExporter.pdfErstellen(spath, Wolke.Char.regelnAnhaengen, self.pdfExporterProgressCallback)
-            self.showProgressBar(False)
-        except Exception as e:
-            self.showProgressBar(False)
-            raise e
+        self.pdfExporter.pdfErstellen(spath, Wolke.Char.regelnAnhaengen)

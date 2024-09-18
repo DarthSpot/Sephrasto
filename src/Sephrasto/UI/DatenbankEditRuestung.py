@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'DatenbankEditRuestung.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.4.2
+## Created by: Qt User Interface Compiler version 6.7.2
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -15,212 +15,291 @@ from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
     QFont, QFontDatabase, QGradient, QIcon,
     QImage, QKeySequence, QLinearGradient, QPainter,
     QPalette, QPixmap, QRadialGradient, QTransform)
-from PySide6.QtWidgets import (QAbstractButton, QApplication, QComboBox, QDialog,
-    QDialogButtonBox, QGridLayout, QLabel, QLineEdit,
-    QSizePolicy, QSpacerItem, QSpinBox, QTextEdit,
-    QWidget)
+from PySide6.QtWidgets import (QAbstractSpinBox, QApplication, QComboBox, QFormLayout,
+    QHBoxLayout, QLabel, QLineEdit, QScrollArea,
+    QSizePolicy, QSpacerItem, QSpinBox, QTabWidget,
+    QTextBrowser, QTextEdit, QVBoxLayout, QWidget)
 
-class Ui_talentDialog(object):
-    def setupUi(self, talentDialog):
-        if not talentDialog.objectName():
-            talentDialog.setObjectName(u"talentDialog")
-        talentDialog.setWindowModality(Qt.ApplicationModal)
-        talentDialog.resize(441, 434)
-        self.gridLayout_2 = QGridLayout(talentDialog)
-        self.gridLayout_2.setObjectName(u"gridLayout_2")
-        self.gridLayout = QGridLayout()
-        self.gridLayout.setObjectName(u"gridLayout")
-        self.sbKopf = QSpinBox(talentDialog)
-        self.sbKopf.setObjectName(u"sbKopf")
-        self.sbKopf.setMinimumSize(QSize(50, 0))
-        self.sbKopf.setMaximumSize(QSize(16777215, 16777215))
-        self.sbKopf.setMaximum(8)
+class Ui_dialog(object):
+    def setupUi(self, dialog):
+        if not dialog.objectName():
+            dialog.setObjectName(u"dialog")
+        dialog.resize(475, 593)
+        self.verticalLayout_3 = QVBoxLayout(dialog)
+        self.verticalLayout_3.setObjectName(u"verticalLayout_3")
+        self.scrollArea = QScrollArea(dialog)
+        self.scrollArea.setObjectName(u"scrollArea")
+        self.scrollArea.setWidgetResizable(True)
+        self.scrollAreaWidgetContents = QWidget()
+        self.scrollAreaWidgetContents.setObjectName(u"scrollAreaWidgetContents")
+        self.scrollAreaWidgetContents.setGeometry(QRect(0, 0, 451, 569))
+        self.formLayout = QFormLayout(self.scrollAreaWidgetContents)
+        self.formLayout.setObjectName(u"formLayout")
+        self.labelName = QLabel(self.scrollAreaWidgetContents)
+        self.labelName.setObjectName(u"labelName")
+        self.labelName.setMinimumSize(QSize(110, 0))
 
-        self.gridLayout.addWidget(self.sbKopf, 11, 2, 1, 1)
+        self.formLayout.setWidget(0, QFormLayout.LabelRole, self.labelName)
 
-        self.sbBeine = QSpinBox(talentDialog)
-        self.sbBeine.setObjectName(u"sbBeine")
-        self.sbBeine.setMinimumSize(QSize(50, 0))
-        self.sbBeine.setMaximumSize(QSize(16777215, 16777215))
-        self.sbBeine.setMaximum(8)
-
-        self.gridLayout.addWidget(self.sbBeine, 6, 2, 1, 1)
-
-        self.warning = QLabel(talentDialog)
-        self.warning.setObjectName(u"warning")
-        self.warning.setVisible(False)
-        self.warning.setStyleSheet(u"background-color: rgb(255, 255, 0); color: black;")
-        self.warning.setWordWrap(True)
-
-        self.gridLayout.addWidget(self.warning, 0, 0, 1, 3)
-
-        self.label_7 = QLabel(talentDialog)
-        self.label_7.setObjectName(u"label_7")
-
-        self.gridLayout.addWidget(self.label_7, 11, 1, 1, 1)
-
-        self.sbBauch = QSpinBox(talentDialog)
-        self.sbBauch.setObjectName(u"sbBauch")
-        self.sbBauch.setMinimumSize(QSize(50, 0))
-        self.sbBauch.setMaximumSize(QSize(16777215, 16777215))
-        self.sbBauch.setMaximum(8)
-
-        self.gridLayout.addWidget(self.sbBauch, 9, 2, 1, 1)
-
-        self.label_3 = QLabel(talentDialog)
-        self.label_3.setObjectName(u"label_3")
-
-        self.gridLayout.addWidget(self.label_3, 7, 1, 1, 1)
-
-        self.sbSchild = QSpinBox(talentDialog)
-        self.sbSchild.setObjectName(u"sbSchild")
-        self.sbSchild.setMinimumSize(QSize(50, 0))
-        self.sbSchild.setMaximumSize(QSize(16777215, 16777215))
-        self.sbSchild.setMaximum(8)
-
-        self.gridLayout.addWidget(self.sbSchild, 7, 2, 1, 1)
-
-        self.label = QLabel(talentDialog)
-        self.label.setObjectName(u"label")
-        self.label.setMinimumSize(QSize(110, 0))
-
-        self.gridLayout.addWidget(self.label, 2, 0, 1, 1)
-
-        self.leName = QLineEdit(talentDialog)
+        self.leName = QLineEdit(self.scrollAreaWidgetContents)
         self.leName.setObjectName(u"leName")
         self.leName.setMinimumSize(QSize(300, 0))
 
-        self.gridLayout.addWidget(self.leName, 2, 1, 1, 2)
+        self.formLayout.setWidget(0, QFormLayout.FieldRole, self.leName)
 
-        self.label_5 = QLabel(talentDialog)
-        self.label_5.setObjectName(u"label_5")
+        self.labelKategorie = QLabel(self.scrollAreaWidgetContents)
+        self.labelKategorie.setObjectName(u"labelKategorie")
 
-        self.gridLayout.addWidget(self.label_5, 9, 1, 1, 1)
+        self.formLayout.setWidget(1, QFormLayout.LabelRole, self.labelKategorie)
 
-        self.sbSchwert = QSpinBox(talentDialog)
-        self.sbSchwert.setObjectName(u"sbSchwert")
-        self.sbSchwert.setMinimumSize(QSize(50, 0))
-        self.sbSchwert.setMaximumSize(QSize(16777215, 16777215))
-        self.sbSchwert.setMaximum(8)
+        self.comboKategorie = QComboBox(self.scrollAreaWidgetContents)
+        self.comboKategorie.setObjectName(u"comboKategorie")
 
-        self.gridLayout.addWidget(self.sbSchwert, 8, 2, 1, 1)
+        self.formLayout.setWidget(1, QFormLayout.FieldRole, self.comboKategorie)
 
-        self.sbBrust = QSpinBox(talentDialog)
-        self.sbBrust.setObjectName(u"sbBrust")
-        self.sbBrust.setMinimumSize(QSize(50, 0))
-        self.sbBrust.setMaximumSize(QSize(16777215, 16777215))
-        self.sbBrust.setMaximum(8)
+        self.labelSystem = QLabel(self.scrollAreaWidgetContents)
+        self.labelSystem.setObjectName(u"labelSystem")
 
-        self.gridLayout.addWidget(self.sbBrust, 10, 2, 1, 1)
+        self.formLayout.setWidget(2, QFormLayout.LabelRole, self.labelSystem)
 
-        self.label_8 = QLabel(talentDialog)
+        self.comboSystem = QComboBox(self.scrollAreaWidgetContents)
+        self.comboSystem.addItem("")
+        self.comboSystem.addItem("")
+        self.comboSystem.addItem("")
+        self.comboSystem.setObjectName(u"comboSystem")
+
+        self.formLayout.setWidget(2, QFormLayout.FieldRole, self.comboSystem)
+
+        self.label_8 = QLabel(self.scrollAreaWidgetContents)
         self.label_8.setObjectName(u"label_8")
 
-        self.gridLayout.addWidget(self.label_8, 5, 0, 1, 1)
+        self.formLayout.setWidget(3, QFormLayout.LabelRole, self.label_8)
 
-        self.label_2 = QLabel(talentDialog)
-        self.label_2.setObjectName(u"label_2")
+        self.horizontalLayout_7 = QHBoxLayout()
+        self.horizontalLayout_7.setObjectName(u"horizontalLayout_7")
+        self.horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
-        self.gridLayout.addWidget(self.label_2, 6, 1, 1, 1)
+        self.horizontalLayout_7.addItem(self.horizontalSpacer)
 
-        self.label_9 = QLabel(talentDialog)
-        self.label_9.setObjectName(u"label_9")
+        self.labelRS = QLabel(self.scrollAreaWidgetContents)
+        self.labelRS.setObjectName(u"labelRS")
 
-        self.gridLayout.addWidget(self.label_9, 3, 0, 1, 1)
+        self.horizontalLayout_7.addWidget(self.labelRS)
 
-        self.label_4 = QLabel(talentDialog)
-        self.label_4.setObjectName(u"label_4")
 
-        self.gridLayout.addWidget(self.label_4, 8, 1, 1, 1)
+        self.formLayout.setLayout(3, QFormLayout.FieldRole, self.horizontalLayout_7)
 
-        self.lblRS = QLabel(talentDialog)
-        self.lblRS.setObjectName(u"lblRS")
+        self.labelBeine = QLabel(self.scrollAreaWidgetContents)
+        self.labelBeine.setObjectName(u"labelBeine")
+        self.labelBeine.setIndent(8)
 
-        self.gridLayout.addWidget(self.lblRS, 5, 2, 1, 1)
+        self.formLayout.setWidget(4, QFormLayout.LabelRole, self.labelBeine)
 
-        self.label_6 = QLabel(talentDialog)
-        self.label_6.setObjectName(u"label_6")
+        self.horizontalLayout_6 = QHBoxLayout()
+        self.horizontalLayout_6.setObjectName(u"horizontalLayout_6")
+        self.horizontalSpacer_2 = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
-        self.gridLayout.addWidget(self.label_6, 10, 1, 1, 1)
+        self.horizontalLayout_6.addItem(self.horizontalSpacer_2)
 
-        self.cbTyp = QComboBox(talentDialog)
-        self.cbTyp.setObjectName(u"cbTyp")
+        self.spinBeine = QSpinBox(self.scrollAreaWidgetContents)
+        self.spinBeine.setObjectName(u"spinBeine")
+        self.spinBeine.setMinimumSize(QSize(50, 0))
+        self.spinBeine.setMaximumSize(QSize(16777215, 16777215))
+        self.spinBeine.setButtonSymbols(QAbstractSpinBox.PlusMinus)
+        self.spinBeine.setMaximum(8)
 
-        self.gridLayout.addWidget(self.cbTyp, 3, 1, 1, 2)
+        self.horizontalLayout_6.addWidget(self.spinBeine)
 
-        self.label_10 = QLabel(talentDialog)
-        self.label_10.setObjectName(u"label_10")
 
-        self.gridLayout.addWidget(self.label_10, 12, 0, 1, 1)
+        self.formLayout.setLayout(4, QFormLayout.FieldRole, self.horizontalLayout_6)
 
-        self.teBeschreibung = QTextEdit(talentDialog)
+        self.labelSchild = QLabel(self.scrollAreaWidgetContents)
+        self.labelSchild.setObjectName(u"labelSchild")
+        self.labelSchild.setIndent(8)
+
+        self.formLayout.setWidget(5, QFormLayout.LabelRole, self.labelSchild)
+
+        self.horizontalLayout_5 = QHBoxLayout()
+        self.horizontalLayout_5.setObjectName(u"horizontalLayout_5")
+        self.horizontalSpacer_3 = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+
+        self.horizontalLayout_5.addItem(self.horizontalSpacer_3)
+
+        self.spinSchild = QSpinBox(self.scrollAreaWidgetContents)
+        self.spinSchild.setObjectName(u"spinSchild")
+        self.spinSchild.setMinimumSize(QSize(50, 0))
+        self.spinSchild.setMaximumSize(QSize(16777215, 16777215))
+        self.spinSchild.setButtonSymbols(QAbstractSpinBox.PlusMinus)
+        self.spinSchild.setMaximum(8)
+
+        self.horizontalLayout_5.addWidget(self.spinSchild)
+
+
+        self.formLayout.setLayout(5, QFormLayout.FieldRole, self.horizontalLayout_5)
+
+        self.labelSchwert = QLabel(self.scrollAreaWidgetContents)
+        self.labelSchwert.setObjectName(u"labelSchwert")
+        self.labelSchwert.setIndent(8)
+
+        self.formLayout.setWidget(6, QFormLayout.LabelRole, self.labelSchwert)
+
+        self.horizontalLayout_4 = QHBoxLayout()
+        self.horizontalLayout_4.setObjectName(u"horizontalLayout_4")
+        self.horizontalSpacer_4 = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+
+        self.horizontalLayout_4.addItem(self.horizontalSpacer_4)
+
+        self.spinSchwert = QSpinBox(self.scrollAreaWidgetContents)
+        self.spinSchwert.setObjectName(u"spinSchwert")
+        self.spinSchwert.setMinimumSize(QSize(50, 0))
+        self.spinSchwert.setMaximumSize(QSize(16777215, 16777215))
+        self.spinSchwert.setButtonSymbols(QAbstractSpinBox.PlusMinus)
+        self.spinSchwert.setMaximum(8)
+
+        self.horizontalLayout_4.addWidget(self.spinSchwert)
+
+
+        self.formLayout.setLayout(6, QFormLayout.FieldRole, self.horizontalLayout_4)
+
+        self.labelBauch = QLabel(self.scrollAreaWidgetContents)
+        self.labelBauch.setObjectName(u"labelBauch")
+        self.labelBauch.setIndent(8)
+
+        self.formLayout.setWidget(7, QFormLayout.LabelRole, self.labelBauch)
+
+        self.horizontalLayout_3 = QHBoxLayout()
+        self.horizontalLayout_3.setObjectName(u"horizontalLayout_3")
+        self.horizontalSpacer_5 = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+
+        self.horizontalLayout_3.addItem(self.horizontalSpacer_5)
+
+        self.spinBauch = QSpinBox(self.scrollAreaWidgetContents)
+        self.spinBauch.setObjectName(u"spinBauch")
+        self.spinBauch.setMinimumSize(QSize(50, 0))
+        self.spinBauch.setMaximumSize(QSize(16777215, 16777215))
+        self.spinBauch.setButtonSymbols(QAbstractSpinBox.PlusMinus)
+        self.spinBauch.setMaximum(8)
+
+        self.horizontalLayout_3.addWidget(self.spinBauch)
+
+
+        self.formLayout.setLayout(7, QFormLayout.FieldRole, self.horizontalLayout_3)
+
+        self.labelBrust = QLabel(self.scrollAreaWidgetContents)
+        self.labelBrust.setObjectName(u"labelBrust")
+        self.labelBrust.setIndent(8)
+
+        self.formLayout.setWidget(8, QFormLayout.LabelRole, self.labelBrust)
+
+        self.horizontalLayout_2 = QHBoxLayout()
+        self.horizontalLayout_2.setObjectName(u"horizontalLayout_2")
+        self.horizontalSpacer_6 = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+
+        self.horizontalLayout_2.addItem(self.horizontalSpacer_6)
+
+        self.spinBrust = QSpinBox(self.scrollAreaWidgetContents)
+        self.spinBrust.setObjectName(u"spinBrust")
+        self.spinBrust.setMinimumSize(QSize(50, 0))
+        self.spinBrust.setMaximumSize(QSize(16777215, 16777215))
+        self.spinBrust.setButtonSymbols(QAbstractSpinBox.PlusMinus)
+        self.spinBrust.setMaximum(8)
+
+        self.horizontalLayout_2.addWidget(self.spinBrust)
+
+
+        self.formLayout.setLayout(8, QFormLayout.FieldRole, self.horizontalLayout_2)
+
+        self.labelKopf = QLabel(self.scrollAreaWidgetContents)
+        self.labelKopf.setObjectName(u"labelKopf")
+        self.labelKopf.setIndent(8)
+
+        self.formLayout.setWidget(9, QFormLayout.LabelRole, self.labelKopf)
+
+        self.horizontalLayout = QHBoxLayout()
+        self.horizontalLayout.setObjectName(u"horizontalLayout")
+        self.horizontalSpacer_7 = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+
+        self.horizontalLayout.addItem(self.horizontalSpacer_7)
+
+        self.spinKopf = QSpinBox(self.scrollAreaWidgetContents)
+        self.spinKopf.setObjectName(u"spinKopf")
+        self.spinKopf.setMinimumSize(QSize(50, 0))
+        self.spinKopf.setMaximumSize(QSize(16777215, 16777215))
+        self.spinKopf.setButtonSymbols(QAbstractSpinBox.PlusMinus)
+        self.spinKopf.setMaximum(8)
+
+        self.horizontalLayout.addWidget(self.spinKopf)
+
+
+        self.formLayout.setLayout(9, QFormLayout.FieldRole, self.horizontalLayout)
+
+        self.labelBeschreibung = QLabel(self.scrollAreaWidgetContents)
+        self.labelBeschreibung.setObjectName(u"labelBeschreibung")
+
+        self.formLayout.setWidget(10, QFormLayout.LabelRole, self.labelBeschreibung)
+
+        self.tabWidget = QTabWidget(self.scrollAreaWidgetContents)
+        self.tabWidget.setObjectName(u"tabWidget")
+        self.tab = QWidget()
+        self.tab.setObjectName(u"tab")
+        self.verticalLayout = QVBoxLayout(self.tab)
+        self.verticalLayout.setSpacing(0)
+        self.verticalLayout.setObjectName(u"verticalLayout")
+        self.verticalLayout.setContentsMargins(0, 0, 0, 0)
+        self.teBeschreibung = QTextEdit(self.tab)
         self.teBeschreibung.setObjectName(u"teBeschreibung")
 
-        self.gridLayout.addWidget(self.teBeschreibung, 12, 1, 1, 2)
+        self.verticalLayout.addWidget(self.teBeschreibung)
 
-        self.label_11 = QLabel(talentDialog)
-        self.label_11.setObjectName(u"label_11")
+        self.tabWidget.addTab(self.tab, "")
+        self.tab_2 = QWidget()
+        self.tab_2.setObjectName(u"tab_2")
+        self.verticalLayout_2 = QVBoxLayout(self.tab_2)
+        self.verticalLayout_2.setObjectName(u"verticalLayout_2")
+        self.verticalLayout_2.setContentsMargins(0, 0, 0, 0)
+        self.tbBeschreibung = QTextBrowser(self.tab_2)
+        self.tbBeschreibung.setObjectName(u"tbBeschreibung")
 
-        self.gridLayout.addWidget(self.label_11, 4, 0, 1, 1)
+        self.verticalLayout_2.addWidget(self.tbBeschreibung)
 
-        self.cbSystem = QComboBox(talentDialog)
-        self.cbSystem.addItem("")
-        self.cbSystem.addItem("")
-        self.cbSystem.addItem("")
-        self.cbSystem.setObjectName(u"cbSystem")
+        self.tabWidget.addTab(self.tab_2, "")
 
-        self.gridLayout.addWidget(self.cbSystem, 4, 1, 1, 2)
+        self.formLayout.setWidget(10, QFormLayout.FieldRole, self.tabWidget)
 
-        self.horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.scrollArea.setWidget(self.scrollAreaWidgetContents)
 
-        self.gridLayout.addItem(self.horizontalSpacer, 5, 1, 1, 1)
+        self.verticalLayout_3.addWidget(self.scrollArea)
+
+        QWidget.setTabOrder(self.leName, self.comboKategorie)
+        QWidget.setTabOrder(self.comboKategorie, self.comboSystem)
+
+        self.retranslateUi(dialog)
+
+        self.tabWidget.setCurrentIndex(0)
 
 
-        self.gridLayout_2.addLayout(self.gridLayout, 0, 0, 1, 1)
-
-        self.buttonBox = QDialogButtonBox(talentDialog)
-        self.buttonBox.setObjectName(u"buttonBox")
-        self.buttonBox.setOrientation(Qt.Horizontal)
-        self.buttonBox.setStandardButtons(QDialogButtonBox.Cancel|QDialogButtonBox.Save)
-        self.buttonBox.setCenterButtons(True)
-
-        self.gridLayout_2.addWidget(self.buttonBox, 3, 0, 1, 1)
-
-        QWidget.setTabOrder(self.leName, self.cbTyp)
-        QWidget.setTabOrder(self.cbTyp, self.cbSystem)
-        QWidget.setTabOrder(self.cbSystem, self.sbBeine)
-        QWidget.setTabOrder(self.sbBeine, self.sbSchild)
-        QWidget.setTabOrder(self.sbSchild, self.sbSchwert)
-        QWidget.setTabOrder(self.sbSchwert, self.sbBauch)
-        QWidget.setTabOrder(self.sbBauch, self.sbBrust)
-        QWidget.setTabOrder(self.sbBrust, self.sbKopf)
-        QWidget.setTabOrder(self.sbKopf, self.teBeschreibung)
-
-        self.retranslateUi(talentDialog)
-        self.buttonBox.accepted.connect(talentDialog.accept)
-        self.buttonBox.rejected.connect(talentDialog.reject)
-
-        QMetaObject.connectSlotsByName(talentDialog)
+        QMetaObject.connectSlotsByName(dialog)
     # setupUi
 
-    def retranslateUi(self, talentDialog):
-        talentDialog.setWindowTitle(QCoreApplication.translate("talentDialog", u"Sephrasto - R\u00fcstung bearbeiten...", None))
-        self.warning.setText(QCoreApplication.translate("talentDialog", u"<html><head/><body><p>Dies ist eine Ilaris-Standardr\u00fcstung. Sobald du hier etwas ver\u00e4nderst, bekommst du eine pers\u00f6nliche Kopie und das Original wird in den Hausregeln gel\u00f6scht. Damit erh\u00e4ltst du f\u00fcr diese R\u00fcstung keine automatischen Updates mehr mit neuen Sephrasto-Versionen.</p></body></html>", None))
-        self.label_7.setText(QCoreApplication.translate("talentDialog", u"Kopf", None))
-        self.label_3.setText(QCoreApplication.translate("talentDialog", u"Schildarm", None))
-        self.label.setText(QCoreApplication.translate("talentDialog", u"Name", None))
-        self.label_5.setText(QCoreApplication.translate("talentDialog", u"Bauch", None))
-        self.label_8.setText(QCoreApplication.translate("talentDialog", u"RS", None))
-        self.label_2.setText(QCoreApplication.translate("talentDialog", u"Beine", None))
-        self.label_9.setText(QCoreApplication.translate("talentDialog", u"Typ", None))
-        self.label_4.setText(QCoreApplication.translate("talentDialog", u"Schwertarm", None))
-        self.lblRS.setText(QCoreApplication.translate("talentDialog", u"0", None))
-        self.label_6.setText(QCoreApplication.translate("talentDialog", u"Brust", None))
-        self.label_10.setText(QCoreApplication.translate("talentDialog", u"Beschreibung", None))
-        self.label_11.setText(QCoreApplication.translate("talentDialog", u"Verf\u00fcgbarkeit", None))
-        self.cbSystem.setItemText(0, QCoreApplication.translate("talentDialog", u"Beide R\u00fcstungssysteme", None))
-        self.cbSystem.setItemText(1, QCoreApplication.translate("talentDialog", u"Einfaches R\u00fcstungssystem", None))
-        self.cbSystem.setItemText(2, QCoreApplication.translate("talentDialog", u"Zonenr\u00fcstungssystem", None))
+    def retranslateUi(self, dialog):
+        dialog.setWindowTitle(QCoreApplication.translate("dialog", u"Sephrasto - R\u00fcstung bearbeiten...", None))
+        self.labelName.setText(QCoreApplication.translate("dialog", u"Name", None))
+        self.labelKategorie.setText(QCoreApplication.translate("dialog", u"Kategorie", None))
+        self.labelSystem.setText(QCoreApplication.translate("dialog", u"Verf\u00fcgbarkeit", None))
+        self.comboSystem.setItemText(0, QCoreApplication.translate("dialog", u"Beide R\u00fcstungssysteme", None))
+        self.comboSystem.setItemText(1, QCoreApplication.translate("dialog", u"Einfaches R\u00fcstungssystem", None))
+        self.comboSystem.setItemText(2, QCoreApplication.translate("dialog", u"Zonenr\u00fcstungssystem", None))
 
+        self.label_8.setText(QCoreApplication.translate("dialog", u"RS", None))
+        self.labelRS.setText(QCoreApplication.translate("dialog", u"0", None))
+        self.labelBeine.setText(QCoreApplication.translate("dialog", u"Beine", None))
+        self.labelSchild.setText(QCoreApplication.translate("dialog", u"Schildarm", None))
+        self.labelSchwert.setText(QCoreApplication.translate("dialog", u"Schwertarm", None))
+        self.labelBauch.setText(QCoreApplication.translate("dialog", u"Bauch", None))
+        self.labelBrust.setText(QCoreApplication.translate("dialog", u"Brust", None))
+        self.labelKopf.setText(QCoreApplication.translate("dialog", u"Kopf", None))
+        self.labelBeschreibung.setText(QCoreApplication.translate("dialog", u"Beschreibung", None))
+        self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab), QCoreApplication.translate("dialog", u"HTML", None))
+        self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_2), QCoreApplication.translate("dialog", u"Vorschau", None))
     # retranslateUi
 

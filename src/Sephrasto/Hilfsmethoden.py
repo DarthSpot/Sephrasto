@@ -4,17 +4,20 @@ Created on Sat Feb 18 16:35:08 2017
 
 @author: Aeolitus
 """
-import Definitionen
 import logging
 import os
 import re
 from Wolke import Wolke
-import Objekte
+from Core.Vorteil import Vorteil, VorteilDefinition
 import subprocess
 import sys
-
-class VoraussetzungException(Exception):
-    pass
+import fnmatch
+import unicodedata
+import locale
+from RestrictedPython import safe_builtins
+from RestrictedPython.Guards import guarded_unpack_sequence, guarded_iter_unpack_sequence
+from RestrictedPython.Eval import default_guarded_getiter, default_guarded_getitem
+import math
 
 class WaffeneigenschaftException(Exception):
     pass
@@ -82,187 +85,17 @@ class Hilfsmethoden:
                 retStr += itm
         return retStr
 
-    @staticmethod
-    def VorStr2Array(VoraussetzungenString, Datenbank):
-        '''
-        Voraussetzungen werden vom User ebenfalls im Fließtext eingetragen.
-        Das Format ist dabei im folgenden Illustriert:
-            "Kein Vorteil Eisenaffine Aura, 
-            Attribut MU 8 ODER Vorteil Geweiht I ODER Vorteil Emphatie,
-            Waffeneigenschaft Rüstungsbrechend"
-        Groß- und Kleinschreibung sind wichtig! Kein geht nicht für Attribute.
-        '''
-        delim = "~"
-
-        retArr = []
-        for itm in VoraussetzungenString.split(","):
-            if len(itm) == 0:
-                continue
-            arrItm = ""
-            strpItm = itm.strip()
-            if " ODER " in strpItm:
-                subArr = []
-                for entr in strpItm.split(" ODER "):
-                    subArr.append(Hilfsmethoden.VorStr2Array(entr, Datenbank))
-                arrItm = subArr
-            else:
-                if strpItm.startswith("Vorteil "):
-                    if not (strpItm[8:] in Datenbank.vorteile):
-                        raise VoraussetzungException("Kann Vorteil '" + strpItm + "' in der Datenbank nicht finden.")
-                    arrItm = "V" + delim + strpItm[8:] + delim + "1"
-                elif strpItm.startswith("Kein Vorteil "):
-                    if not (strpItm[13:] in Datenbank.vorteile):
-                        raise VoraussetzungException("Kann Vorteil '" + strpItm + "' in der Datenbank nicht finden.")
-                    arrItm = "V" + delim + strpItm[13:] + delim + "0"
-                elif strpItm.startswith("Talent "):
-                    if not strpItm[7] == "'":
-                        raise VoraussetzungException("Der Name eines Talents muss in Apostrophen gefasst werden. . (" + strpItm + ")")
-                    strpItm = strpItm[8:]
-                    index = strpItm.find("'")
-                    if index == -1:
-                        raise VoraussetzungException("Der Name einer Fertigkeit muss in Apostrophen gefasst werden. . (" + strpItm + ")")
-                    talent = strpItm[:index]
-                    if not (talent in Datenbank.talente):
-                        raise VoraussetzungException("Kann Talent '" + strpItm + "' in der Datenbank nicht finden.")
-                    try:
-                        wert = int(strpItm[index+2:]) if len(strpItm) -1 > index else -1
-                        arrItm = "T" + delim + talent + delim + str(wert)
-                    except ValueError:
-                        raise VoraussetzungException("Der angegebene Talent-PW '" + strpItm[index+2:] + "' ist keine gültige Zahl")
-                elif strpItm.startswith("Waffeneigenschaft "):
-                    if (not (strpItm[18:] in Datenbank.waffeneigenschaften)) and strpItm[18:] != "Nahkampfwaffe" and strpItm[18:] != "Fernkampfwaffe":
-                        raise VoraussetzungException("Kann keine Waffeneigenschaft '" + strpItm + "' in der Datenbank finden.")
-                    arrItm = "W" + delim + strpItm[18:] + delim + "1"
-                elif strpItm.startswith("Attribut "):
-                    attribut = strpItm[9:11]
-                    if attribut in Definitionen.Attribute:
-                        try:
-                            wert = int(strpItm[12:])
-                            arrItm = "A" + delim + attribut + delim + str(wert)
-                        except ValueError:
-                            raise VoraussetzungException("Der angegebene Attribut-Wert '" + strpItm[12:] + "' ist keine gültige Zahl.")
-                    else:
-                        raise VoraussetzungException("Das angegebene Attribut '" + attribut + "' ist ungültig. Unterstützt werden 'KO', 'MU', 'GE', 'KK', 'IN', 'KL', 'CH' und 'FF'")
-                elif strpItm.startswith("MeisterAttribut "):
-                    attribut = strpItm[16:18]
-                    if attribut in Definitionen.Attribute:
-                        try:
-                            wert = int(strpItm[19:])
-                            arrItm = "M" + delim + attribut + delim + str(wert)
-                        except ValueError:
-                            raise VoraussetzungException("Der angegebene Attribut-Wert '" + strpItm[19:] + "' ist keine gültige Zahl.")
-                    else:
-                        raise VoraussetzungException("Das angegebene Attribut '" + attribut + "' ist ungültig. Unterstützt werden 'KO', 'MU', 'GE', 'KK', 'IN', 'KL', 'CH' und 'FF'")
-                elif strpItm.startswith("Übernatürliche-Fertigkeit "):
-                    if not strpItm[26] == "'":
-                        raise VoraussetzungException("Der Name einer Übernatürlichen Fertigkeit muss in Apostrophen gefasst werden. (" + strpItm + ")")
-                    strpItm = strpItm[27:]
-                    index = strpItm.find("'")
-                    if index == -1:
-                        raise VoraussetzungException("Der Name einer Übernatürlichen Fertigkeit muss in Apostrophen gefasst werden. (" + strpItm + ")")
-                    fertigkeit = strpItm[:index]
-
-                    if not (fertigkeit in Datenbank.übernatürlicheFertigkeiten):
-                        raise VoraussetzungException("Kann Übernatürliche Fertigkeit '" + fertigkeit + "' in der Datenbank nicht finden.")
-                    try:
-                        wert = int(strpItm[index+2:]) if len(strpItm) -1 > index else -1
-                        arrItm = "U" + delim + fertigkeit + delim + str(wert)
-                    except ValueError:
-                        raise VoraussetzungException("Der angegebene Fertigkeitswert '" + strpItm[index+2:] + "' ist keine gültige Zahl")
-                elif strpItm.startswith("Fertigkeit "):
-                    if not strpItm[11] == "'":
-                        raise VoraussetzungException("Der Name einer Fertigkeit muss in Apostrophen gefasst werden. . (" + strpItm + ")")
-                    strpItm = strpItm[12:]
-                    index = strpItm.find("'")
-                    if index == -1:
-                        raise VoraussetzungException("Der Name einer Fertigkeit muss in Apostrophen gefasst werden. . (" + strpItm + ")")
-                    fertigkeit = strpItm[:index]
-
-                    if not (fertigkeit in Datenbank.fertigkeiten):
-                        raise VoraussetzungException("Kann Fertigkeit '" + fertigkeit + "' in der Datenbank nicht finden.")
-
-                    try:
-                        wert = int(strpItm[index+2:]) if len(strpItm) -1 > index else -1
-                        arrItm = "F" + delim + fertigkeit + delim + str(wert)
-                    except ValueError:
-                        raise VoraussetzungException("Der angegebene Fertigkeitswert '" + strpItm[index+2:] + "' ist keine gültige Zahl")
-                else:
-                    raise VoraussetzungException("Unbekanntes Schlüsselwort '" + strpItm + "'. Unterstützt werden 'Vorteil', 'Kein Vorteil', 'Waffeneigenschaft', 'Attribut', 'MeisterAttribut', 'Übernatürliche-Fertigkeit' und 'Fertigkeit'.")
-            retArr.append(arrItm)
-        return retArr
-    
-    @staticmethod
-    def VorArray2Str(VoraussetzungenArray, Datenbank = None):
-        delim = "~"
-
-        retArr = []
-        retStr = ""
-        for itm in VoraussetzungenArray:
-            if type(itm) is list:
-                orArr = []
-                orStr = ""
-                for part in itm:
-                    orArr.append(Hilfsmethoden.VorArray2Str(part, Datenbank))    
-                if len(orArr) > 0:
-                    orStr = orArr[0]
-                if len(orArr) > 1:
-                    for ent in orArr[1:]:
-                        orStr += " ODER " + ent
-                if orStr != "":
-                    retArr.append(orStr)
-            else:
-                arr = itm.split(delim)
-                enStr = ""
-                if arr[0] == "V":
-                    if arr[2] == "1":
-                        enStr += "Vorteil "
-                    else:
-                        enStr += "Kein Vorteil "
-                    enStr += arr[1]
-                elif arr[0] == "T":
-                    enStr += "Talent "
-                    enStr += "'" + arr[1] + "'"
-                    if arr[2] != '-1':
-                        enStr += " " + str(arr[2])
-                elif arr[0] == "W":
-                    enStr += "Waffeneigenschaft "
-                    enStr += arr[1]
-                elif arr[0] == "A":
-                    enStr += "Attribut "
-                    enStr += arr[1]
-                    enStr += " "
-                    enStr += str(arr[2])
-                elif arr[0] == "M":
-                    enStr += "MeisterAttribut "
-                    enStr += arr[1]
-                    enStr += " "
-                    enStr += str(arr[2])
-                elif arr[0] == "U":
-                    enStr += "Übernatürliche-Fertigkeit "
-                    enStr += "'" + arr[1] + "'"
-                    if arr[2] != '-1':
-                        enStr += " " + str(arr[2])
-                elif arr[0] == "F":
-                    enStr += "Fertigkeit "
-                    enStr += "'" + arr[1] + "'"
-                    if arr[2] != '-1':
-                        enStr += " " + str(arr[2])
-                if enStr != "":
-                    retArr.append(enStr)
-        if len(retArr) > 0:
-            retStr = retArr[0]
-        if len(retArr) > 1:
-            for itm in retArr[1:]:
-                if len(itm) > 0:
-                    retStr += ", " + itm
-        return retStr
-    
-    @staticmethod
-    def voraussetzungenPrüfen(vorteile, waffen, attribute, übernatürlicheFertigkeiten, fertigkeiten, voraussetzungen):
-        return Hilfsmethoden.__voraussetzungenPrüfen(vorteile, waffen, attribute, übernatürlicheFertigkeiten, fertigkeiten, voraussetzungen, False)
 
     @staticmethod
-    def __voraussetzungenPrüfen(vorteile, waffen, attribute, übernatürlicheFertigkeiten, fertigkeiten, voraussetzungen, Or):
+    def containsWildcard(string):
+        return "*" in string or "?" in string or "[" in string
+
+    @staticmethod
+    def voraussetzungenPrüfen(dbElement, vorteile, waffen, attribute, übernatürlicheFertigkeiten, fertigkeiten, talente):
+        return Hilfsmethoden.__voraussetzungenPrüfen(dbElement, dbElement.voraussetzungen, vorteile, waffen, attribute, übernatürlicheFertigkeiten, fertigkeiten, talente, False)
+
+    @staticmethod
+    def __voraussetzungenPrüfen(dbElement, voraussetzungen, vorteile, waffen, attribute, übernatürlicheFertigkeiten, fertigkeiten, talente, Or):
         '''
         Prüft, ob ein Array von Voraussetzungen erfüllt ist.
         Format: ['L:Str:W', 'L:Str:W']
@@ -287,93 +120,86 @@ class Hilfsmethoden:
         for voraus in voraussetzungen:
             erfüllt = False
             if type(voraus) is list:
-                erfüllt = Hilfsmethoden.__voraussetzungenPrüfen(vorteile, waffen, attribute, übernatürlicheFertigkeiten, fertigkeiten, voraus,True)
+                erfüllt = Hilfsmethoden.__voraussetzungenPrüfen(dbElement, voraus, vorteile, waffen, attribute, übernatürlicheFertigkeiten, fertigkeiten, talente, True)
             else: 
-                #Split am Separator
-                delim = "~"
-                arr = re.split(delim, voraus, re.UNICODE)
                 #Vorteile:
-                if arr[0] == 'V':
-                    if len(arr) > 2:
-                        cond = int(arr[2])
-                    else: 
-                        cond = 1
-                    found = 0
-                    if arr[1] in vorteile:
-                        found = 1
-                    if found == 1 and cond == 1:
-                        erfüllt = True
-                    elif found == 0 and cond == 0:
-                        erfüllt = True
+                if voraus.typ == 'V':
+                    cond = voraus.wert == 1
+                    found = voraus.name in vorteile
+                    if not found and Hilfsmethoden.containsWildcard(voraus.name):
+                        ownerIsVorteil = isinstance(dbElement, VorteilDefinition) or isinstance(dbElement, Vorteil)
+                        for vort in vorteile:
+                            #wildcard-suchen sollten das element ausschließen, dessen voraussetzung gerade geprüft wird
+                            if ownerIsVorteil and dbElement.name == vort:
+                                continue
+                            if fnmatch.fnmatchcase(vort, voraus.name):
+                                found = True
+                                break
+                    erfüllt = (found and cond) or (not found and not cond)
                 #Talente:
-                elif arr[0] == 'T':
-                    if arr[1] in Wolke.DB.talente:
-                        talent = Wolke.DB.talente[arr[1]]
-                        wert = int(arr[2])
-                        if not talent.isSpezialTalent():
-                            for fert in talent.fertigkeiten:
-                                if not fert in fertigkeiten:
-                                    continue
-                                fertigkeit = fertigkeiten[fert]
-                                if wert == -1:
-                                    if arr[1] in fertigkeit.gekaufteTalente:
-                                        erfüllt = True
-                                        break
-                                elif (arr[1] in fertigkeit.gekaufteTalente and fertigkeit.probenwertTalent >= wert) or fertigkeit.probenwert >= wert:
-                                    erfüllt = True
-                                    break
+                elif voraus.typ == 'T':
+                    if voraus.name in Wolke.DB.talente:
+                        if voraus.wert == -1:
+                            if voraus.name in talente:
+                                erfüllt = True
                         else:
-                            for fert in talent.fertigkeiten:
-                                if not fert in übernatürlicheFertigkeiten:
+                            talent = Wolke.DB.talente[voraus.name]
+                            ferts = fertigkeiten
+                            if talent.spezialTalent:
+                                ferts = übernatürlicheFertigkeiten
+                            for fertName in talent.fertigkeiten:
+                                if not fertName in ferts:
                                     continue
-                                fertigkeit = übernatürlicheFertigkeiten[fert]
-                                if arr[1] in fertigkeit.gekaufteTalente and (wert == -1 or fertigkeit.probenwertTalent >= wert):
+                                fert = ferts[fertName]
+                                pw = fert.probenwert
+                                if voraus.name in talente:
+                                    # do not use talent.probenwert here, it may not be up to date
+                                    pw = fert.probenwertTalent
+                                if pw >= voraus.wert:
                                     erfüllt = True
                                     break
                 #Waffeneigenschaften:
-                elif arr[0] == 'W':
+                elif voraus.typ == 'W':
                     for waffe in waffen:
-                        if arr[1] == "Nahkampfwaffe" and type(waffe) == Objekte.Nahkampfwaffe:
+                        if voraus.name == "Nahkampfwaffe" and waffe.nahkampf:
                             erfüllt = True
                             break
-                        elif arr[1] == "Fernkampfwaffe" and type(waffe) == Objekte.Fernkampfwaffe:
+                        elif voraus.name == "Fernkampfwaffe" and waffe.fernkampf:
                             erfüllt = True
                             break
-                        elif arr[1] in waffe.eigenschaften:
+                        elif voraus.name in waffe.eigenschaften:
                             erfüllt = True
                             break
                 #Attribute:
-                elif arr[0] == 'A':
+                elif voraus.typ == 'A':
                     #Wir greifen direkt auf den Eintrag zu und vergleichen. 
-                    if attribute[arr[1]].wert >= int(arr[2]):
+                    if attribute[voraus.name].wert >= voraus.wert:
                         erfüllt = True
                 #MeisterAttribute:
-                elif arr[0] == 'M':
+                elif voraus.typ == 'M':
                     #Wir greifen direkt auf den Eintrag zu und vergleichen. 
-                    if attribute[arr[1]].wert >= int(arr[2]):
-                        attrSorted = [a.wert for a in attribute.values() if a.key != arr[1]]
+                    if attribute[voraus.name].wert >= voraus.wert:
+                        attrSorted = [a.wert for a in attribute.values() if a.name != voraus.name]
                         attr1 = max(attrSorted)
                         attrSorted.remove(attr1)
                         attr2 = max(attrSorted)
-                        erfüllt = attr1 + attr2 >= int(arr[2]) * 1.6  
+                        erfüllt = attr1 + attr2 >= voraus.wert * 1.6  
                 #Übernatürliche Fertigkeiten:
-                elif arr[0] == 'U':
-                    if arr[1] in übernatürlicheFertigkeiten:
-                        fertigkeit = übernatürlicheFertigkeiten[arr[1]]
-                        wert = int(arr[2])
-                        if wert == -1:
+                elif voraus.typ == 'U':
+                    if voraus.name in übernatürlicheFertigkeiten:
+                        fertigkeit = übernatürlicheFertigkeiten[voraus.name]
+                        if voraus.wert == -1:
                             erfüllt = len(fertigkeit.gekaufteTalente) > 0
                         else:
-                            erfüllt = fertigkeit.probenwertTalent >= wert
+                            erfüllt = fertigkeit.probenwertTalent >= voraus.wert
                 #Fertigkeiten:
-                elif arr[0] == 'F':
-                    if arr[1] in fertigkeiten:
-                        fertigkeit = fertigkeiten[arr[1]]
-                        wert = int(arr[2])
-                        if wert == -1:
+                elif voraus.typ == 'F':
+                    if voraus.name in fertigkeiten:
+                        fertigkeit = fertigkeiten[voraus.name]
+                        if voraus.wert == -1:
                             erfüllt = len(fertigkeit.gekaufteTalente) > 0
                         else:
-                            erfüllt = fertigkeit.probenwertTalent >= wert
+                            erfüllt = fertigkeit.probenwertTalent >= voraus.wert
             if not erfüllt:
                 retNor = False
             else:
@@ -385,42 +211,17 @@ class Hilfsmethoden:
             return retNor
 
     @staticmethod
-    def isAttributVoraussetzung(attribut, voraussetzungen):
-        for voraus in voraussetzungen:
-            if type(voraus) is list:
-                if Hilfsmethoden.isAttributVoraussetzung(attribut, voraus):
-                    return True
-            else: 
-                delim = "~"
-                arr = re.split(delim, voraus, re.UNICODE)
-                if arr[0] == 'A':
-                    if arr[1] == attribut:
-                        return True
-                elif arr[0] == 'M':
-                    return True
-        return False
-
-    @staticmethod
-    def AttrArray2Str(AttrArray, Datenbank = None):
-        if len(AttrArray) != 3:
-            return ""
-        retStr = ""
-        for el in AttrArray:
-            if el not in Definitionen.Attribute:
-                return ""
-        retStr = AttrArray[0] + "|" + AttrArray[1] + "|" + AttrArray[2]
-        return retStr
+    def AttrArray2Str(AttrArray):
+        return "|".join(AttrArray)
     
     @staticmethod
-    def AttrStr2Array(AttrStr, Datenbank = None):
+    def AttrStr2Array(AttrStr):
         retArr = []
         if len(AttrStr) == 0:
-            return []
+            return retArr
         for el in AttrStr.split("|"):
             if len(el) == 0:
                 continue
-            if el not in Definitionen.Attribute:
-                return []
             retArr.append(el)
         return retArr
     
@@ -453,7 +254,7 @@ class Hilfsmethoden:
             subprocess.call([opener, filepath])
     
     @staticmethod
-    def fixHtml(text):
+    def fixHtml(text, addCSS = True):
         # Replace newlines by <br> tags, unless they are preceded by a '>' or followed by a block-level element
         # Its a bit hacky but placing <br> tags after every line in the database editor would be too cumbersome.
 
@@ -461,4 +262,92 @@ class Hilfsmethoden:
         text = re.sub("(</(table|p|div|h\\d|ol|ul|li|tr|th|td)>)\n","\\1", text) #remove any newlines after a block-level element
         text = text.replace("\n", "<br>")
         text = text.replace("    ", "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;") #replace 4 whitespaces by non-breaking spaces - the whitespaces would be removed otherwise
+        text = text.replace("S. ", "S.&nbsp;") # make sure there is no linebreak in pagenumbers
+        text = text.replace("$sephrasto_dir$", "file:///" + os.getcwd().replace('\\', '/'))
+        text = text.replace("$regeln_dir$", "file:///" + Wolke.Settings['Pfad-Regeln'].replace('\\', '/'))
+        text = text.replace("$plugins_dir$", "file:///" + Wolke.Settings['Pfad-Plugins'].replace('\\', '/'))
+
+        if addCSS:
+            css = f"""<style>
+h4 {{ margin: 0px; margin-top: 1em; }}
+table {{ margin-top: 1em; margin-bottom: 1em; border-collapse: collapse; }}
+th {{ border-bottom: 1px solid #4A000B; }}
+td {{ padding: 0.1em; }}
+ul {{ padding: 0; margin: 0; -qt-list-indent: 0; margin-left: {Hilfsmethoden.emToPixels(1.4)}px; }}
+ol {{ padding: 0; margin: 0; -qt-list-indent: 0; margin-left: {Hilfsmethoden.emToPixels(1.8)}px; }}
+</style>"""
+            text = f"<head>{css}</head><body>{text}</body>"
         return text
+
+    @staticmethod
+    def emToPixels(em):
+        return em * Wolke.Settings['FontSize']
+
+    # see https://docs.python.org/3.9/howto/unicode.html#comparing-strings
+    # added strxfrm to use current locale, i. e. to properly sort german umlauts
+    # using the unicode collation algorithm would be the perfect solution but strxfrm suffices for now
+    @staticmethod
+    def unicodeCaseInsensitive(s):
+        def NFD(s):
+            return unicodedata.normalize('NFD', s)
+        return locale.strxfrm(NFD(NFD(s).casefold()))
+
+    @staticmethod
+    def createScriptAPI():
+        def writeGuard(obj):
+            if isinstance(obj, dict):
+                return obj
+            if isinstance(obj, list):
+                return obj
+            raise RuntimeError('Cannot write outside whitelisted objects')
+
+        scriptAPI = {
+            "__builtins__" : safe_builtins,
+            "_unpack_sequence_": guarded_unpack_sequence,
+            "_getiter_": default_guarded_getiter,
+            "_iter_unpack_sequence_" : guarded_iter_unpack_sequence,
+            "_getitem_" : default_guarded_getitem,
+            "_write_": writeGuard,
+            "max" : max,
+            "min" : min,
+            "clamp" : lambda val, minimum, maximum: max(min(val, maximum), minimum),
+            "round" : lambda val: (1 if val >= 0 else -1) * int(abs(val) + 0.5), # pythons "round" rounds half to even, we need half up
+            "roundDown" : lambda val: int(val),
+            "roundUp" : lambda val: math.ceil(val) if val >= 0 else math.floor(val),
+            "sum" : sum
+        }
+        return scriptAPI
+
+class SortedCategoryToListDict(dict):
+    def __init__(self, categories):
+        self.categories = list(categories.keys())
+        for category in sorted(self.categories, key=lambda category: int(categories[category])):
+            self[category] = []
+        self.categoryFilter = None
+        self.nameFilter = None
+
+    def setCategoryFilter(self, categoryFilter):
+        self.categoryFilter = categoryFilter
+
+    def setNameFilter(self, nameFilter):
+        if nameFilter:
+            self.nameFilter = nameFilter.lower()
+        else:
+            self.nameFilter = None
+
+    def append(self, categoryIndex, value):
+        idx = min(categoryIndex, len(self.categories) -1)
+        if self.categoryFilter is not None and idx not in self.categoryFilter:
+            return
+        categoryName = self.categories[idx]
+        if self.nameFilter and not (self.nameFilter in str(value).lower() or self.nameFilter in categoryName.lower()):
+            return
+        self[categoryName].append(value)
+
+    def appendByName(self, categoryName, value):
+        idx = self.categories.index(categoryName)
+        self.append(idx, value)
+
+    def sortValues(self, sortKey=Hilfsmethoden.unicodeCaseInsensitive):
+        for array in self.values():
+            array.sort(key=sortKey)

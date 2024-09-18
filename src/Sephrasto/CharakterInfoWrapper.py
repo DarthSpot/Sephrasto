@@ -12,6 +12,9 @@ import logging
 from EinstellungenWrapper import EinstellungenWrapper
 import os
 from EventBus import EventBus
+from Hilfsmethoden import Hilfsmethoden
+import copy
+from QtUtils.TreeExpansionHelper import TreeExpansionHelper
 
 class FocusWatcher(QtCore.QObject):
     def __init__(self, callback):
@@ -47,71 +50,30 @@ class InfoWrapper(QtCore.QObject):
         self.ui.checkRegeln.stateChanged.connect(self.einstellungenChanged)
         self.ui.comboHausregeln.currentIndexChanged.connect(self.einstellungenChanged)
         self.ui.checkFormular.stateChanged.connect(self.einstellungenChanged)
+        self.ui.checkDetails.stateChanged.connect(self.einstellungenChanged)
 
-        boegen = [os.path.basename(os.path.splitext(bogen)[0]) for bogen in Wolke.Charakterbögen]
+        boegen = list(Wolke.Charakterbögen.keys())
+        boegen.sort()
+        if "Standard Charakterbogen" in boegen:
+            boegen.insert(0, boegen.pop(boegen.index("Standard Charakterbogen")))
+
         for bogen in boegen:
-            if bogen == "Standard Charakterbogen":
-                self.ui.comboCharsheet.insertItem(0, bogen)
-            elif bogen == "Langer Charakterbogen":
-                self.ui.comboCharsheet.insertItem(0, bogen)
-            else:
-                self.ui.comboCharsheet.addItem(bogen)
+            self.ui.comboCharsheet.addItem(bogen.replace(" Charakterbogen ", "").replace(" Charakterbogen", ""), bogen)
         if not (Wolke.Char.charakterbogen in boegen):
-            Wolke.Char.charakterbogen = self.ui.comboCharsheet.itemText(0)
+            Wolke.Char.charakterbogen = self.ui.comboCharsheet.itemData(0)
         self.ui.comboCharsheet.currentIndexChanged.connect(self.einstellungenChanged)
         self.ui.spinRegelnGroesse.valueChanged.connect(self.einstellungenChanged)
         self.ui.checkReq.stateChanged.connect(self.reqChanged)
+        
+        self.ui.labelRegelnGroesse.setText('\uf031\uf07d')
+        self.ui.labelRegelnGroesse.setEnabled(Wolke.Char.regelnAnhaengen)
+        self.ui.spinRegelnGroesse.setEnabled(Wolke.Char.regelnAnhaengen)
 
+        self.ui.buttonRegeln.setText('\uf0ae')
+        self.ui.buttonRegeln.clicked.connect(self.showRegelKategorien)
+        self.ui.buttonRegeln.setEnabled(Wolke.Char.regelnAnhaengen)
         self.focusWatcher = FocusWatcher(self.notizChanged)
         self.ui.teNotiz.installEventFilter(self.focusWatcher)
-
-        self.initialHausregeln = Wolke.Char.hausregeln
-
-        self.initialDetails = False
-        for bogen in Wolke.Charakterbögen:
-            if Wolke.Char.charakterbogen == os.path.basename(os.path.splitext(bogen)[0]):
-                self.initialDetails = Wolke.Charakterbögen[bogen].beschreibungDetails
-                break
-
-        self.ui.spinRegelnGroesse.setEnabled(Wolke.Char.regelnAnhaengen)
-        self.ui.listRegelKategorien.setEnabled(Wolke.Char.regelnAnhaengen)
-
-        vorteilTypen = Wolke.DB.einstellungen["Vorteile: Typen"].toTextList()
-        regelnTypen = Wolke.DB.einstellungen["Regeln: Typen"].toTextList()
-        self.regelKategorien = []
-        for r in Wolke.DB.einstellungen["Regelanhang: Reihenfolge"].toTextList():
-            if r[0] == "T" and len(r) > 2:
-                continue
-            if r[0] == "V" and len(r) > 2 and r[2:].isnumeric():
-                typ = int(r[2:])
-                self.regelKategorien.append([vorteilTypen[typ], r])
-            elif r[0] == "R" and len(r) > 2 and r[2:].isnumeric():
-                typ = int(r[2:])
-                self.regelKategorien.append([regelnTypen[typ], r])
-            elif r[0] == "W":
-                self.regelKategorien.append(["Waffeneigenschaften", r])
-            elif r[0] == "Z":
-                self.regelKategorien.append(["Zauber", r])
-            elif r[0] == "L":
-                self.regelKategorien.append(["Liturgien", r])
-            elif r[0] == "A":
-                self.regelKategorien.append(["Anrufungen", r])
-            else:
-                name = EventBus.applyFilter("regelanhang_reihenfolge_name", r)
-                self.regelKategorien.append([name, r])
-
-        model = QtGui.QStandardItemModel(self.ui.listRegelKategorien)
-        for kategorie in self.regelKategorien:
-            item = QtGui.QStandardItem(kategorie[0])
-            item.setCheckable(True)
-            if kategorie[1] in Wolke.Char.regelnKategorien:
-                item.setCheckState(QtCore.Qt.Checked)
-            else:
-                item.setCheckState(QtCore.Qt.Unchecked)
-            model.appendRow(item)
-
-        self.ui.listRegelKategorien.setModel(model)
-        self.ui.listRegelKategorien.model().dataChanged.connect(self.regelKategorienChanged)
 
         self.currentlyLoading = False
 
@@ -125,22 +87,10 @@ class InfoWrapper(QtCore.QObject):
         Wolke.Char.voraussetzungenPruefen = self.ui.checkReq.isChecked()
         self.modified.emit()
 
-    def regelKategorienChanged(self):
-        aktiveKategorien = []
-
-        for i in range(self.ui.listRegelKategorien.model().rowCount()):
-            item = self.ui.listRegelKategorien.model().item(i)
-            if item.checkState() == QtCore.Qt.Checked:
-                aktiveKategorien.append(self.regelKategorien[i][1])
-
-        Wolke.Char.regelnKategorien = aktiveKategorien
-        self.modified.emit()
-
     @staticmethod
     def getCharakterbogen(name):
-        for bogen in Wolke.Charakterbögen.values():
-            if name == os.path.basename(os.path.splitext(bogen.filePath)[0]):
-                return bogen
+        if name in Wolke.Charakterbögen:
+            return Wolke.Charakterbögen[name]
         return None
 
     def einstellungenChanged(self):
@@ -149,21 +99,25 @@ class InfoWrapper(QtCore.QObject):
         Wolke.Char.finanzenAnzeigen = self.ui.checkFinanzen.isChecked()
         Wolke.Char.ueberPDFAnzeigen = self.ui.checkUeberPDF.isChecked()
         Wolke.Char.regelnAnhaengen = self.ui.checkRegeln.isChecked()
+        Wolke.Char.detailsAnzeigen = self.ui.checkDetails.isChecked()
         Wolke.Char.regelnGroesse = self.ui.spinRegelnGroesse.value()
-        Wolke.Char.hausregeln = self.ui.comboHausregeln.currentText() if self.ui.comboHausregeln.currentText() != "Keine" else None
-        Wolke.Char.charakterbogen = self.ui.comboCharsheet.currentText()
+        Wolke.Char.charakterbogen = self.ui.comboCharsheet.itemData(self.ui.comboCharsheet.currentIndex())
         Wolke.Char.formularEditierbar = self.ui.checkFormular.isChecked()
 
-        details = False
         cbi = InfoWrapper.getCharakterbogen(Wolke.Char.charakterbogen)
         if cbi:
             self.ui.comboCharsheet.setToolTip(cbi.info)
-            details = cbi.beschreibungDetails
 
-        self.ui.labelReload.setVisible(Wolke.Char.hausregeln != self.initialHausregeln or self.initialDetails != details)
+        if self.ui.comboHausregeln.currentText() == Wolke.DB.hausregelnAnzeigeName:
+            self.ui.labelReload.setVisible(False)
+            Wolke.Char.neueHausregeln = None
+        else:
+            self.ui.labelReload.setVisible(True)
+            Wolke.Char.neueHausregeln = self.ui.comboHausregeln.currentText()
 
+        self.ui.labelRegelnGroesse.setEnabled(Wolke.Char.regelnAnhaengen)
         self.ui.spinRegelnGroesse.setEnabled(Wolke.Char.regelnAnhaengen)
-        self.ui.listRegelKategorien.setEnabled(Wolke.Char.regelnAnhaengen)
+        self.ui.buttonRegeln.setEnabled(Wolke.Char.regelnAnhaengen)
 
         self.modified.emit()
 
@@ -175,9 +129,10 @@ class InfoWrapper(QtCore.QObject):
         self.ui.checkFinanzen.setChecked(Wolke.Char.finanzenAnzeigen)
         self.ui.checkUeberPDF.setChecked(Wolke.Char.ueberPDFAnzeigen)
         self.ui.checkRegeln.setChecked(Wolke.Char.regelnAnhaengen)
+        self.ui.checkDetails.setChecked(Wolke.Char.detailsAnzeigen)
         self.ui.spinRegelnGroesse.setValue(Wolke.Char.regelnGroesse)
-        self.ui.comboHausregeln.setCurrentText(Wolke.Char.hausregeln or "Keine")
-        self.ui.comboCharsheet.setCurrentText(Wolke.Char.charakterbogen)
+        self.ui.comboHausregeln.setCurrentText(Wolke.DB.hausregelnAnzeigeName)
+        self.ui.comboCharsheet.setCurrentText(Wolke.Char.charakterbogen.replace(" Charakterbogen ", "").replace(" Charakterbogen", ""))
         cbi = InfoWrapper.getCharakterbogen(Wolke.Char.charakterbogen)
         if cbi:
             self.ui.comboCharsheet.setToolTip(cbi.info)
@@ -252,4 +207,102 @@ class InfoWrapper(QtCore.QObject):
         
         if Wolke.Char.notiz != self.ui.teNotiz.toPlainText():
             Wolke.Char.notiz = self.ui.teNotiz.toPlainText()
+            self.modified.emit()
+
+    def showRegelKategorien(self):
+        dialog = QtWidgets.QDialog()
+        dialog.setWindowTitle("Regelanhang Auswahl")
+        rootLayout = QtWidgets.QVBoxLayout()
+
+        tree = QtWidgets.QTreeWidget()
+
+        button = QtWidgets.QPushButton()
+        button.setProperty("class", "icon")
+
+        rootLayout.addWidget(button)
+        rootLayout.addWidget(tree)
+
+        def createItem(parent, name, cat):
+            if isinstance(parent, QtWidgets.QTreeWidgetItem) and parent.text(0) == name:
+                parent.setData(0, QtCore.Qt.UserRole, cat)
+                if cat in Wolke.Char.deaktivierteRegelKategorien:
+                    parent.setCheckState(0, QtCore.Qt.Unchecked)
+                return parent
+
+            item = QtWidgets.QTreeWidgetItem(parent)
+            item.setText(0, name)
+            item.setData(0, QtCore.Qt.UserRole, cat)
+            if cat in Wolke.Char.deaktivierteRegelKategorien:
+                item.setCheckState(0, QtCore.Qt.Unchecked)
+            else:
+                item.setCheckState(0, QtCore.Qt.Checked)
+            item.setFlags(item.flags() | QtCore.Qt.ItemIsAutoTristate)
+            return item
+
+        parent = tree
+        for r in Wolke.DB.einstellungen["Regelanhang: Reihenfolge"].wert:
+            if r[0] == "T" and len(r) > 2:
+                parent = QtWidgets.QTreeWidgetItem(tree)
+                parent.setText(0, r[2:])
+                parent.setExpanded(True)
+                parent.setCheckState(0, QtCore.Qt.Checked)
+                parent.setFlags(parent.flags() | QtCore.Qt.ItemIsAutoTristate)
+            elif r[0] == "V" and len(r) > 2 and r[2:].isnumeric():
+                kategorie = int(r[2:])
+                item = createItem(parent, Wolke.DB.einstellungen["Vorteile: Kategorien"].wert.keyAtIndex(kategorie), r)
+                for v in Wolke.Char.vorteile.values():
+                    if v.cheatsheetAuflisten and v.kategorie == kategorie:
+                        createItem(item, v.name, "V:" + v.name)
+            elif r[0] == "R" and len(r) > 2 and r[2:].isnumeric():
+                kategorie = int(r[2:])
+                item = createItem(parent, Wolke.DB.einstellungen["Regeln: Kategorien"].wert.keyAtIndex(kategorie), r)
+                for r in Wolke.DB.regeln.values():
+                    if r.kategorie == kategorie and Wolke.Char.voraussetzungenPrüfen(r):
+                        createItem(item, r.anzeigename, "R:" + r.name)
+            elif r[0] == "W":
+                createItem(parent, "Waffeneigenschaften", r)
+            elif r[0] == "S" and len(r) > 2 and r[2:].isnumeric():
+                kategorie = int(r[2:])
+                item = createItem(parent, Wolke.DB.einstellungen["Talente: Kategorien"].wert.keyAtIndex(kategorie), r)
+                for t in Wolke.Char.talente.values():
+                    if t.cheatsheetAuflisten and t.kategorie == kategorie:
+                        createItem(item, t.anzeigename, "S:" + t.name)
+            else:
+                name = EventBus.applyFilter("regelanhang_reihenfolge_name", r)
+                createItem(parent, name, r)
+
+        tree.setHeaderHidden(True)
+        tree.header().setSectionResizeMode(0, QtWidgets.QHeaderView.Fixed)
+
+        expansionHelper = TreeExpansionHelper(tree, button)
+
+        buttonBox = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        buttonBox.accepted.connect(lambda: dialog.accept())
+        buttonBox.rejected.connect(lambda: dialog.reject())
+
+        rootLayout.addWidget(buttonBox)
+
+        dialog.setLayout(rootLayout)
+        dialog.setWindowModality(QtCore.Qt.ApplicationModal)
+        windowSize = Wolke.Settings["WindowSize-Regelanhang"]
+        dialog.resize(windowSize[0], windowSize[1])
+        dialog.show()
+        accepted = dialog.exec() == QtWidgets.QDialog.Accepted
+        Wolke.Settings["WindowSize-Regelanhang"] = [dialog.size().width(), dialog.size().height()]
+        if accepted:
+            Wolke.Char.deaktivierteRegelKategorien = []
+            for i in range(tree.topLevelItemCount()):
+                parent = tree.topLevelItem(i)
+                if parent.childCount() == 0:
+                    if parent.checkState(0) == QtCore.Qt.Unchecked:
+                        Wolke.Char.deaktivierteRegelKategorien.append(parent.data(0, QtCore.Qt.UserRole))
+                else:
+                    for j in range(parent.childCount()):
+                        child = parent.child(j)
+                        if child.checkState(0) == QtCore.Qt.Unchecked:
+                            Wolke.Char.deaktivierteRegelKategorien.append(child.data(0, QtCore.Qt.UserRole))
+                        for k in range(child.childCount()):
+                            actualElement = child.child(k)
+                            if actualElement.checkState(0) == QtCore.Qt.Unchecked:
+                                Wolke.Char.deaktivierteRegelKategorien.append(actualElement.data(0, QtCore.Qt.UserRole))
             self.modified.emit()

@@ -11,167 +11,287 @@ from PySide6 import QtWidgets, QtCore, QtGui
 import logging
 from EventBus import EventBus
 from Hilfsmethoden import Hilfsmethoden
+from QtUtils.Section import Section
+from QtUtils.AutoResizingTextBrowser import AutoResizingTextBrowser, TextEditAutoResizer
+from QtUtils.TreeExpansionHelper import TreeExpansionHelper
+from functools import partial
+from Core.Vorteil import Vorteil
+from VoraussetzungenListe import VoraussetzungenListe
+from Hilfsmethoden import SortedCategoryToListDict
+from QtUtils.RichTextButton import RichTextToolButton
+from ScriptPickerWrapper import ScriptPickerWrapper
 
 class CharakterVorteileWrapper(QtCore.QObject):
     modified = QtCore.Signal()
     
-    def __init__(self):
+    def __init__(self, supportedCategories = []):
         super().__init__()
         logging.debug("Initializing VorteileWrapper...")
-        self.rowHeight = 30
+        self.rowMargin = Hilfsmethoden.emToPixels(1)
+        line = QtWidgets.QLineEdit()
+        self.rowHeight = line.sizeHint().height()
+        line.deleteLater()
+
         self.form = QtWidgets.QWidget()
         self.ui = UI.CharakterVorteile.Ui_Form()
         self.ui.setupUi(self.form)
-        
-        self.vorteilTypen = Wolke.DB.einstellungen["Vorteile: Typen"].toTextList()
+
         font = QtWidgets.QApplication.instance().font()
+        self.ui.treeWidget.setProperty("class", "treeVorteile")
         self.ui.treeWidget.itemSelectionChanged.connect(self.vortClicked)
         self.ui.treeWidget.itemChanged.connect(self.itemChangeHandler)
         self.ui.treeWidget.header().setSectionResizeMode(0,QtWidgets.QHeaderView.Stretch)
-        
+        self.ui.treeWidget.header().setSectionResizeMode(1,QtWidgets.QHeaderView.Fixed)
+        self.ui.treeWidget.header().resizeSection(1, Hilfsmethoden.emToPixels(10))
+        self.ui.treeWidget.header().setSectionResizeMode(2,QtWidgets.QHeaderView.Fixed)
+        self.ui.treeWidget.header().resizeSection(2, Hilfsmethoden.emToPixels(3))
+
+        self.expansionHelper = TreeExpansionHelper(self.ui.treeWidget, self.ui.buttonExpandToggle)
+
+        self.autoResizeHelper = TextEditAutoResizer(self.ui.plainText)
+
         self.ui.splitter.adjustSize()
         width = self.ui.splitter.size().width()
         self.ui.splitter.setSizes([int(width*0.6), int(width*0.4)])
 
         if len(Wolke.Char.vorteile) > 0:
-            self.currentVort = Wolke.Char.vorteile[0]
+            self.currentVort = Wolke.Char.vorteile.__iter__().__next__()
         else:
-            self.currentVort = ""
-            
+            self.currentVort = Wolke.DB.vorteile.__iter__().__next__()
+
         self.itemWidgets = {}
-        
-        self.ui.checkShowAll.stateChanged.connect(self.onShowAllClicked)
-        self.showUnavailable = False
+        self.qvSlots = {}
+        self.qvTexts = {}
+        self.qvSections = {}
+
+        # Set supported Vorteil Kategorien - all by default. This increases the reusability and might be useful for plugins.
+        self.supportedCategories = supportedCategories
+        if len(self.supportedCategories) == 0:
+            for i in range(len(Wolke.DB.einstellungen["Vorteile: Kategorien"].wert)):
+                self.supportedCategories.append(i)
         self.initVorteile()
 
-    def onShowAllClicked(self):
-        self.showUnavailable = self.ui.checkShowAll.isChecked()
+        self.ui.labelFilter.setText("\uf002")
+        self.ui.nameFilterEdit.setFocus()
+        self.ui.nameFilterEdit.textChanged.connect(self.load)     
+        self.shortcutSearch = QtGui.QAction()
+        self.shortcutSearch.setShortcut("Ctrl+F")
+        self.shortcutSearch.triggered.connect(self.ui.nameFilterEdit.setFocus)
+        self.ui.nameFilterEdit.addAction(self.shortcutSearch)
+        self.shortcutClearSearch = QtGui.QAction()
+        self.shortcutClearSearch.setShortcut("Esc")
+        self.shortcutClearSearch.triggered.connect(lambda: self.ui.nameFilterEdit.setText("") if self.ui.nameFilterEdit.hasFocus() else None)
+        self.ui.nameFilterEdit.addAction(self.shortcutClearSearch)
+
+        self.buttonFilterText = "<span style='" + Wolke.FontAwesomeCSS + f"'>\uf0b0</span>&nbsp;&nbsp;Filter"
+        self.ui.buttonFilter = RichTextToolButton(None, self.buttonFilterText)
+        self.ui.buttonFilter.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+        self.ui.horizontalLayout.addWidget(self.ui.buttonFilter)
+        self.filterMenu = QtWidgets.QMenu()
+        action = self.filterMenu.addAction("Filter zurücksetzen")
+        action.setVisible(False)
+        action.setShortcut("Ctrl+R")
+        action.triggered.connect(self.resetFilter)
+
+        action = self.filterMenu.addAction("Gekauft")
+        action.setCheckable(True)
+        action.setChecked(True)
+        action.setShortcut("Ctrl+G")
+        action.triggered.connect(self.load)
+
+        action = self.filterMenu.addAction("Nicht gekauft")
+        action.setCheckable(True)
+        action.setChecked(True)
+        action.setShortcut("Ctrl+N")
+        action.triggered.connect(self.load)
+
+        action = self.filterMenu.addAction("Voraussetzungen nicht erfüllt")
+        action.setCheckable(True)
+        action.setChecked(False)
+        action.setShortcut(QtCore.QCoreApplication.tr("Ctrl+V"))
+        action.triggered.connect(self.load)
+        self.ui.buttonFilter.setMenu(self.filterMenu)
+
+    def resetFilter(self):
+        for action in self.filterMenu.actions():
+            action.blockSignals(True)
+
+        self.filterMenu.actions()[1].setChecked(True)
+        self.filterMenu.actions()[2].setChecked(True)
+        self.filterMenu.actions()[3].setChecked(False)
+
+        for action in self.filterMenu.actions():
+            action.blockSignals(False)
         self.load()
+
+    def kosten(self, vorteil):
+        if isinstance(vorteil, Vorteil):
+            return vorteil.kosten
+        else:
+            return EventBus.applyFilter("vorteil_kosten", vorteil.kosten, { "charakter" : Wolke.Char, "vorteil" : vorteil.name })
 
     def initVorteile(self):
         self.ui.treeWidget.blockSignals(True)
-        vortList = []
-        for vortTyp in self.vorteilTypen:
-            vortList.append([])
 
-        for el in Wolke.DB.vorteile:
-            idx = min(Wolke.DB.vorteile[el].typ, len(vortList) - 1)
-            vortList[idx].append(el)
-        
-        for vorteile in vortList:
-            vorteile.sort()
+        vorteileByKategorie = SortedCategoryToListDict(Wolke.DB.einstellungen["Vorteile: Kategorien"].wert)
+        vorteileByKategorie.setCategoryFilter(self.supportedCategories)
+        for vorteil in Wolke.DB.vorteile.values():
+            vorteileByKategorie.append(vorteil.kategorie, vorteil.name)
+        vorteileByKategorie.sortValues()
 
-        for i in range(len(vortList)):
+        for kategorie, vorteile in vorteileByKategorie.items():
             parent = QtWidgets.QTreeWidgetItem(self.ui.treeWidget)
-            parent.setText(0, self.vorteilTypen[i])
+            parent.setText(0, kategorie)
             parent.setText(1,"")
             parent.setExpanded(True)
-            parent.setSizeHint(0, QtCore.QSize(0, self.rowHeight))
+            parent.setSizeHint(0, QtCore.QSize(0, self.rowHeight + self.rowMargin))
             font = parent.font(0)
             font.setBold(True)
             font.setCapitalization(QtGui.QFont.SmallCaps)
             font.setPointSize(Wolke.FontHeadingSizeL3)
             parent.setFont(0, font)
-            for el in vortList[i]:
+
+            for el in vorteile:
                 child = QtWidgets.QTreeWidgetItem(parent)
-                child.setText(0, Wolke.DB.vorteile[el].name)
-                child.setSizeHint(0, QtCore.QSize(0, self.rowHeight))
-                if el in Wolke.Char.vorteile:    
+                child.setText(0, el)
+                child.setSizeHint(0, QtCore.QSize(0, self.rowHeight + self.rowMargin))
+
+                vorteil = Wolke.DB.vorteile[el]
+                if el in Wolke.Char.vorteile:
+                    vorteil = Wolke.Char.vorteile[el]
                     child.setCheckState(0, QtCore.Qt.Checked)
-                else:
-                    child.setCheckState(0, QtCore.Qt.Unchecked)
-                if Wolke.DB.vorteile[el].variableKosten:
+
+                if vorteil.variableKosten:
                     spin = QtWidgets.QSpinBox()
-                    spin.setFixedHeight(self.rowHeight)
                     spin.setMinimum(-9999)
                     spin.setSuffix(" EP")
                     spin.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
                     spin.setMaximum(9999)
-                    if el == Wolke.Char.minderpakt:
-                        spin.setValue(20)
-                        spin.setReadOnly(True)
-                    else:
-                        if el in Wolke.Char.vorteileVariableKosten:
-                            spin.setValue(Wolke.Char.vorteileVariableKosten[el])
-                        else:
-                            spin.setValue(Wolke.DB.vorteile[el].kosten)
+                    spin.setValue(self.kosten(vorteil))
+                    spin.setReadOnly("Minderpakt" in Wolke.Char.vorteile and vorteil.name == Wolke.Char.vorteile["Minderpakt"].kommentar)
                     spin.setSingleStep(20)
                     self.itemWidgets[el] = spin
-                    spin.valueChanged.connect(lambda qtNeedsThis=False, name=el: self.spinnerChanged(name))
+                    spin.valueChanged.connect(partial(self.spinnerChanged, name=vorteil.name))
                     self.ui.treeWidget.setItemWidget(child,1,spin)
                 else:
-                    child.setText(1, "20 EP" if el == Wolke.Char.minderpakt else str(Wolke.DB.vorteile[el].kosten) + " EP")
+                    child.setText(1, str(self.kosten(vorteil)) + " EP")
 
-                if Wolke.DB.vorteile[el].kommentarErlauben:
-                    if child.checkState(0) == QtCore.Qt.Checked:
-                        self.handleAddKommentarWidget(el, child)
-                else:
-                    child.setText(1, "20 EP" if el == Wolke.Char.minderpakt else str(Wolke.DB.vorteile[el].kosten) + " EP")
+                favoriteButton = QtWidgets.QPushButton()
+                favoriteButton.setText("\uf005")
+                favoriteButton.setFlat(True)
+                favoriteButton.clicked.connect(partial(self.markFavorite, name=vorteil.name))
+                self.itemWidgets[el+"Favorite"] = favoriteButton
+                self.updateFavoriteButton(el)
+                self.ui.treeWidget.setItemWidget(child, 2, favoriteButton)
 
-        self.updateInfo()
+                if child.checkState(0) == QtCore.Qt.Checked:
+                    self.handleAddSubwidgets(el, child)
+
         self.ui.treeWidget.blockSignals(False)
+
+    def markFavorite(self, name):
+        if name in Wolke.Char.vorteilFavoriten:
+            Wolke.Char.vorteilFavoriten.remove(name)
+        else:
+            Wolke.Char.vorteilFavoriten.append(name)
+        self.updateFavoriteButton(name)
+
+    def updateFavoriteButton(self, name):
+        # The full/empty star icons are unfortunatelly different fontawesome fonts
+        # Cannot use class property to switch the font - qt wont update the visuals when the class is changed
+        button = self.itemWidgets[name+"Favorite"]
+        if name in Wolke.Char.vorteilFavoriten:
+            button.setStyleSheet(f"QPushButton {{ {Wolke.FontAwesomeCSS} max-width: {Hilfsmethoden.emToPixels(3.2)}px; max-height: {Hilfsmethoden.emToPixels(3.2)}px; }}")
+            button.setToolTip("Klicke, damit der Vorteil nicht mehr als Favorit markiert wird.")
+        else:
+            button.setStyleSheet(f"QPushButton {{ {Wolke.FontAwesomeRegularCSS} max-width: {Hilfsmethoden.emToPixels(3.2)}px; max-height: {Hilfsmethoden.emToPixels(3.2)}px; }}")
+            button.setToolTip("Klicke, damit der Vorteil als Favorit markiert wird.\nFavoriten werden unabhängig von den Filter-Einstellungen angezeigt.")
         
     def load(self):
-        self.ui.checkShowAll.setVisible(Wolke.Char.voraussetzungenPruefen)
+        numFilters = sum([1 for a in self.filterMenu.actions()[1:] if a.isChecked()])
+
+        if numFilters == 0:
+            showPurchased = True
+            showUnpurchased = True
+            showUnvailable = True
+            self.ui.buttonFilter.setText(self.buttonFilterText)
+        else:
+            showPurchased = self.filterMenu.actions()[1].isChecked()
+            showUnpurchased = self.filterMenu.actions()[2].isChecked()
+            showUnvailable = self.filterMenu.actions()[3].isChecked()
+            self.ui.buttonFilter.setText(f"{self.buttonFilterText} <span style='color: green;'>({numFilters})</span>")
+        self.filterMenu.actions()[0].setVisible(not(showPurchased and showUnpurchased and not showUnvailable))
 
         self.ui.treeWidget.blockSignals(True)
-        vortList = []
-        for vortTyp in self.vorteilTypen:
-            vortList.append([])
 
-        for el in Wolke.DB.vorteile:
-            if Wolke.Char.voraussetzungenPrüfen(Wolke.DB.vorteile[el].voraussetzungen) or el == Wolke.Char.minderpakt:
-                idx = min(Wolke.DB.vorteile[el].typ, len(vortList) -1)
-                vortList[idx].append(el)
+        vorteileByKategorie = SortedCategoryToListDict(Wolke.DB.einstellungen["Vorteile: Kategorien"].wert)
+        vorteileByKategorie.setCategoryFilter(self.supportedCategories)
+        for vorteil in Wolke.DB.vorteile.values():
+            if vorteil.name in Wolke.Char.vorteile:
+                vorteil = Wolke.Char.vorteile[vorteil.name]
 
-        for i in range(len(vortList)):
+            if Wolke.Char.voraussetzungenPrüfen(vorteil):
+                vorteileByKategorie.append(vorteil.kategorie, vorteil.name)
+
+        i = -1
+        for vorteile in vorteileByKategorie.values():
+            i += 1
             itm = self.ui.treeWidget.topLevelItem(i)
             if type(itm) != QtWidgets.QTreeWidgetItem:
                 continue
             if itm == 0: 
                 continue
 
-            if self.showUnavailable:
-                itm.setHidden(False)
-            else:
-                itm.setHidden(len(vortList[i]) == 0)
-
+            hasVisibleItems = False
             for j in range(itm.childCount()):
                 chi = itm.child(j)
                 if type(chi) != QtWidgets.QTreeWidgetItem:
                     continue
-                txt = chi.text(0)
-                if txt in Wolke.Char.vorteile or txt == Wolke.Char.minderpakt:    
-                    chi.setCheckState(0, QtCore.Qt.Checked)
-                    if txt in Wolke.Char.vorteileVariableKosten and Wolke.DB.vorteile[txt].variableKosten:
-                        self.itemWidgets[txt].setValue(Wolke.Char.vorteileVariableKosten[txt])
+                vorteil = Wolke.DB.vorteile[chi.text(0)]
 
-                    if txt in Wolke.Char.vorteileKommentare and Wolke.DB.vorteile[txt].kommentarErlauben:
-                        self.handleAddKommentarWidget(txt, chi)
+                isFiltered = self.ui.nameFilterEdit.text() != "" and \
+                    (not self.ui.nameFilterEdit.text().lower() in vorteil.name.lower()) and \
+                    (not self.ui.nameFilterEdit.text().lower() in itm.text(0).lower())
+
+                if vorteil.name in Wolke.Char.vorteile:
+                    vorteil = Wolke.Char.vorteile[vorteil.name]
+                    chi.setCheckState(0, QtCore.Qt.Checked)
+                    self.handleAddSubwidgets(vorteil.name, chi)
+                    chi.setHidden(isFiltered or not showPurchased)
                 else:
-                    chi.setCheckState(0, QtCore.Qt.Unchecked) 
-                if txt not in vortList[i]:
-                    if self.showUnavailable:
+                    chi.setCheckState(0, QtCore.Qt.Unchecked)
+                    # remove potential subwidgets (call doesnt do anything if it doesnt exist)
+                    chi.takeChild(0)
+                    # restore potential widget changes by minderpakt
+                    if vorteil.name in self.itemWidgets:
+                        self.itemWidgets[vorteil.name].setReadOnly(False)
+                    chi.setHidden(isFiltered or not showUnpurchased)
+
+                if vorteil.variableKosten:
+                    self.itemWidgets[vorteil.name].setValue(self.kosten(vorteil))
+                else:
+                    chi.setText(1, str(self.kosten(vorteil)) + " EP")
+
+                if vorteil.name not in vorteile:
+                    if showUnvailable:
                         chi.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
                         chi.setCheckState(0,QtCore.Qt.Unchecked)
                         chi.setForeground(0, QtGui.QBrush(QtCore.Qt.red))
-                        chi.setHidden(False)
+                        chi.setHidden(isFiltered)
                     else:
                         chi.setHidden(True)
-                    Wolke.Char.removeVorteil(txt)
+                    Wolke.Char.removeVorteil(vorteil.name)
                 else:
                     chi.setFlags(QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
                     chi.setForeground(0, QtGui.QBrush())
+
+                if vorteil.name in Wolke.Char.vorteilFavoriten:
                     chi.setHidden(False)
 
-                if Wolke.DB.vorteile[txt].variableKosten and not txt in Wolke.Char.vorteileVariableKosten:
-                    if txt in self.itemWidgets:
-                        Wolke.Char.vorteileVariableKosten[txt] = self.itemWidgets[txt].value()
-                    else:
-                        Wolke.Char.vorteileVariableKosten[txt] = Wolke.DB.vorteile[txt].kosten
+                if not chi.isHidden():
+                    hasVisibleItems = True
 
-                if Wolke.DB.vorteile[txt].kommentarErlauben and not txt in Wolke.Char.vorteileKommentare:
-                    Wolke.Char.vorteileKommentare[txt] = ""
+            itm.setHidden(not hasVisibleItems)
 
         self.updateInfo()
         self.ui.treeWidget.blockSignals(False)
@@ -179,85 +299,113 @@ class CharakterVorteileWrapper(QtCore.QObject):
     def update(self):
         pass
 
-    def spinnerChanged(self,name):
-        if Wolke.DB.vorteile[name].variableKosten:
-            Wolke.Char.vorteileVariableKosten[name] = self.itemWidgets[name].value()
+    def spinnerChanged(self, value, name):
+        if name in Wolke.Char.vorteile and Wolke.Char.vorteile[name].variableKosten:
+            Wolke.Char.vorteile[name].kosten = self.itemWidgets[name].value()
         self.currentVort = name
         self.modified.emit()
         self.updateInfo()
 
-    def kommentarChanged(self, name, text):
-        if Wolke.DB.vorteile[name].kommentarErlauben:
-            Wolke.Char.vorteileKommentare[name] = text
+    def kommentarChanged(self, text, name):
+        vorteil = Wolke.Char.vorteile[name]
+        vorteil.kommentar = text
+        self.currentVort = name
+        self.modified.emit()
+        self.updateInfo()
+        
+    def editorScriptChanged(self, name, widget):
+        vorteil = Wolke.Char.vorteile[name]      
+        vorteil.editorScript = widget.toPlainText()
         self.currentVort = name
         self.modified.emit()
         self.updateInfo()
 
-    def handleAddKommentarWidget(self, name, parent):
-        if not Wolke.DB.vorteile[name].kommentarErlauben or parent.childCount() > 0:
+        if vorteil.editorScriptFault:
+            widget.setStyleSheet("border: 1px solid red;")
+            widget.setToolTip(vorteil.editorScriptFault)
+        else:
+            widget.setStyleSheet("")
+            widget.setToolTip("")
+
+    def openScriptPicker(self, scriptEdit):
+        pickerClass = EventBus.applyFilter("class_scriptpicker_wrapper", ScriptPickerWrapper)
+        picker = pickerClass(Wolke.DB, scriptEdit.toPlainText())
+        if picker.script != None:
+            scriptEdit.setPlainText(picker.script)
+
+    def handleAddSubwidgets(self, name, parent):
+        if parent.childCount() > 0 or name not in Wolke.Char.vorteile:
             return
-        kommentar = ""
-        if name in Wolke.Char.vorteileKommentare:
-            kommentar = Wolke.Char.vorteileKommentare[name]
+        vorteil = Wolke.Char.vorteile[name]
+
+        if not (vorteil.kommentarErlauben or vorteil.editorScriptErlauben):
+            return
+
+        layout = QtWidgets.QFormLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setFormAlignment(QtCore.Qt.AlignVCenter)
+        rowHeight = 0
+        if vorteil.kommentarErlauben:
+            text = QtWidgets.QLineEdit(vorteil.kommentar)
+            text.setReadOnly(name == "Minderpakt")
+            text.setFixedHeight(self.rowHeight)
+            layout.addRow("Kommentar", text)
+            text.textChanged.connect(partial(self.kommentarChanged, name=name))
+            rowHeight += self.rowHeight
+
+        if vorteil.editorScriptErlauben:
+            childLayout = QtWidgets.QHBoxLayout()
+            text = QtWidgets.QPlainTextEdit(vorteil.editorScript)
+            text.setFixedHeight(2 * self.rowHeight)
+            text.textChanged.connect(partial(self.editorScriptChanged, name=name, widget=text))
+            if vorteil.editorScriptFault:
+                text.setStyleSheet("border: 1px solid red;")
+                text.setToolTip(vorteil.editorScriptFault)
+
+            button = QtWidgets.QPushButton()
+            button.setProperty("class", "iconSmall")
+            button.setText("\uf121")
+            button.setToolTip("Scripteditor öffnen")
+            button.clicked.connect(partial(self.openScriptPicker, scriptEdit=text))
+            childLayout.addWidget(text)
+            childLayout.addWidget(button)
+            layout.addRow("Script", childLayout)
+
+            if rowHeight != 0:
+                rowHeight += layout.verticalSpacing()
+            rowHeight += 2 * self.rowHeight
 
         w = QtWidgets.QWidget()
-        layout = QtWidgets.QHBoxLayout()
-        margin = 4
-        layout.setContentsMargins(0, margin, 0, margin)
-        label = QtWidgets.QLabel("Kommentar")
-        text = QtWidgets.QLineEdit(kommentar)
-        layout.addWidget(label)
-        layout.addWidget(text)
         w.setLayout(layout)
-        text.textChanged.connect(lambda text, name=name: self.kommentarChanged(name, text))
-
         child = QtWidgets.QTreeWidgetItem(parent)
-        child.setSizeHint(0, QtCore.QSize(0, self.rowHeight + 2*margin))
+
+        child.setSizeHint(0, QtCore.QSize(0, rowHeight + self.rowMargin))
         self.ui.treeWidget.setItemWidget(child,0,w)
         parent.setExpanded(True)
-
-    def handleRemoveKommentarWidget(self, parent):
-        parent.takeChild(0) #doesnt do anything if it doesnt exist
 
     def handleAddMinderpakt(self, name, item):
         if name != "Minderpakt":
             return None
-        minderp = CharakterMinderpaktWrapper.CharakterMinderpaktWrapper()
-        if minderp.minderpakt is None:
+        mpWrapper = CharakterMinderpaktWrapper.CharakterMinderpaktWrapper()
+        if mpWrapper.minderpakt is None:
             Wolke.Char.removeVorteil(name)
             return None
-        if minderp.minderpakt in Wolke.DB.vorteile and minderp.minderpakt not in Wolke.Char.vorteile:
-            Wolke.Char.minderpakt = minderp.minderpakt
-            Wolke.Char.addVorteil(minderp.minderpakt)
-            minderpaktWidget = self.ui.treeWidget.findItems(Wolke.Char.minderpakt, QtCore.Qt.MatchRecursive)[0]
+        if mpWrapper.minderpakt not in Wolke.Char.vorteile:
+            minderpakt = Wolke.Char.vorteile["Minderpakt"]
+            minderpakt.kommentar = mpWrapper.minderpakt
+            minderpakt.voraussetzungen = VoraussetzungenListe().compile("Vorteil " + minderpakt.kommentar, Wolke.DB)
+            vorteil = Wolke.Char.addVorteil(minderpakt.kommentar)
+            vorteil.voraussetzungen = VoraussetzungenListe().compile("Vorteil Minderpakt", Wolke.DB)
+            vorteil.kosten = 20
+           
+            minderpaktWidget = self.ui.treeWidget.findItems(vorteil.name, QtCore.Qt.MatchRecursive)[0]
 
-            if Wolke.Char.minderpakt in self.itemWidgets:
-                self.itemWidgets[Wolke.Char.minderpakt].setReadOnly(True)
-                self.itemWidgets[Wolke.Char.minderpakt].setValue(20)
+            if vorteil.name in self.itemWidgets:
+                self.itemWidgets[vorteil.name].setReadOnly(True)
+                self.itemWidgets[vorteil.name].setValue(20)
             else:
                 minderpaktWidget.setText(1, "20 EP")
             return minderpaktWidget
-        return None
-
-    def restoreMinderpaktWidgets(self, name, item):
-            if name in self.itemWidgets:
-                self.itemWidgets[name].setReadOnly(False)
-                self.itemWidgets[name].setValue(Wolke.DB.vorteile[name].kosten)
-            else:
-                item.setText(1, str(Wolke.DB.vorteile[name].kosten) + " EP")
-
-    def handleRemoveMinderpakt(self, name, item):
-        if name == "Minderpakt":
-            Wolke.Char.removeVorteil(Wolke.Char.minderpakt)
-            minderpaktWidget = self.ui.treeWidget.findItems(Wolke.Char.minderpakt, QtCore.Qt.MatchRecursive)[0]
-            self.restoreMinderpaktWidgets(Wolke.Char.minderpakt, minderpaktWidget)
-            Wolke.Char.minderpakt = None
-            return minderpaktWidget
-
-        if Wolke.Char.minderpakt is not None and name == Wolke.Char.minderpakt:
-            Wolke.Char.removeVorteil("Minderpakt")
-            self.restoreMinderpaktWidgets(Wolke.Char.minderpakt, item)
-            Wolke.Char.minderpakt = None
         return None
     
     def itemChangeHandler(self, item, column):
@@ -271,55 +419,81 @@ class CharakterVorteileWrapper(QtCore.QObject):
 
         if cs == QtCore.Qt.Checked and name not in Wolke.Char.vorteile and name != "":
             Wolke.Char.addVorteil(name)
-            self.handleAddKommentarWidget(name, item)
             manualUpdate = self.handleAddMinderpakt(name, item)
+            self.handleAddSubwidgets(name, item)   
         elif cs != QtCore.Qt.Checked and name in Wolke.Char.vorteile:
             Wolke.Char.removeVorteil(name)
-            self.handleRemoveKommentarWidget(item)
-            manualUpdate = self.handleRemoveMinderpakt(name, item)
 
         self.modified.emit()
         self.load()
         self.ui.treeWidget.blockSignals(False)
 
         if manualUpdate:
-            self.itemChangeHandler(manualUpdate, 0)
+           self.itemChangeHandler(manualUpdate, 0)
     
     def vortClicked(self):
         for el in self.ui.treeWidget.selectedItems():
-            if el.text(0) in self.vorteilTypen:
+            if el.text(0) in Wolke.DB.einstellungen["Vorteile: Kategorien"].wert:
                 continue
             self.currentVort = el.text(0)
             break #First one should be all of them
         self.updateInfo()
-        
+
     def updateInfo(self):
         if self.currentVort != "":
             vorteil = Wolke.DB.vorteile[self.currentVort]
+            if self.currentVort in Wolke.Char.vorteile:
+                vorteil = Wolke.Char.vorteile[self.currentVort]
             self.ui.labelVorteil.setText(vorteil.name)
-            self.ui.labelTyp.setText(self.vorteilTypen[vorteil.typ])
+            self.ui.labelTyp.setText(vorteil.kategorieName(Wolke.DB))
             self.ui.labelNachkauf.setText(vorteil.nachkauf)
-
-            voraussetzungen = [v.strip() for v in Hilfsmethoden.VorArray2Str(vorteil.voraussetzungen).split(",")]
-            voraussetzungen = [v for v in voraussetzungen if not v.startswith("Kein Vorteil Tradition")]
-            voraussetzungen = [v + " und 2 weitere Attribute auf insgesamt 16" if "MeisterAttribut" in v else v for v in voraussetzungen]
-            voraussetzungen = ", ".join(voraussetzungen)
-            voraussetzungen = voraussetzungen.replace(" ODER ", " oder ")
-            voraussetzungen = voraussetzungen.replace("'", "") # remove apostrophes from "Fertigkeit" and "Übernatürliche-Fertigkeit"
-            voraussetzungen = voraussetzungen.replace("Fertigkeit ", "")
-            voraussetzungen = voraussetzungen.replace("Übernatürliche-Fertigkeit ", "")
-            voraussetzungen = voraussetzungen.replace("MeisterAttribut ", "")
-            voraussetzungen = voraussetzungen.replace("Attribut ", "")
-            voraussetzungen = voraussetzungen.replace("Vorteil ", "")
-            voraussetzungen = voraussetzungen.replace("Kein ", "kein ")
-            if not voraussetzungen:
-                voraussetzungen = "keine"
+            voraussetzungen = vorteil.voraussetzungen.anzeigetext(Wolke.DB)
             self.ui.labelVoraussetzungen.setText(voraussetzungen)
 
-            self.ui.plainText.setPlainText("")
-            self.ui.plainText.appendHtml(Hilfsmethoden.fixHtml(vorteil.text))
-            if vorteil.variableKosten and self.currentVort in Wolke.Char.vorteileVariableKosten:
-                self.ui.labelKosten.setText(str(Wolke.Char.vorteileVariableKosten[self.currentVort]) + " EP")
-            else:
-                self.ui.labelKosten.setText(str(vorteil.kosten) + " EP")
-            
+            text = vorteil.text
+            if vorteil.bedingungen:
+                text = f"<i>Bedingungen</i>: {vorteil.bedingungen}\n\n" + text
+
+            if vorteil.info:
+                text += f"\n\n<b>Sephrasto</b>: {vorteil.info}"
+            self.ui.plainText.setText(Hilfsmethoden.fixHtml(text))
+
+            kosten = self.kosten(vorteil)
+            if self.currentVort in Wolke.Char.vorteile:
+                kosten = Wolke.Char.vorteile[self.currentVort].kosten
+            self.ui.labelKosten.setText(str(kosten) + " EP")
+
+            # delete old querverweise ui elements
+            for qv in self.qvSlots:
+                self.qvTexts[qv].sizeChanged.disconnect(self.qvSlots[qv]) #leaks otherwise
+            self.qvSlots = {}
+            self.qvTexts = {}
+            self.qvSections = {}
+
+            for i in reversed(range(self.ui.vlQuerverweise.count())):
+                widget = self.ui.vlQuerverweise.itemAt(i).widget()
+                widget.setParent(None)
+                del widget
+
+            # build new querverweise ui elements
+            if len(vorteil.querverweise) > 0:
+                header = QtWidgets.QLabel()
+                header.setText("Querverweise:")
+                self.ui.vlQuerverweise.addWidget(header)
+
+            for qv in vorteil.querverweiseResolved:
+                section = Section(qv)
+                self.qvSections[qv] = section
+                contentLayout = QtWidgets.QVBoxLayout()
+                contentLayout.setContentsMargins(0, 0, 0, 0)
+                qvText = AutoResizingTextBrowser()
+                self.qvTexts[qv] = qvText
+                qvText.setText(Hilfsmethoden.fixHtml(vorteil.querverweiseResolved[qv]))
+                self.qvSlots[qv] = partial(self.updateSectionHeight, qv=qv)
+                qvText.sizeChanged.connect(self.qvSlots[qv])
+                contentLayout.addWidget(qvText)
+                section.setContentLayout(contentLayout)
+                self.ui.vlQuerverweise.addWidget(section)
+
+    def updateSectionHeight(self, width, height, qv):
+        self.qvSections[qv].updateHeight(height, True)

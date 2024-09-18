@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'CharakterFreieFertigkeitenPicker.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.4.2
+## Created by: Qt User Interface Compiler version 6.7.2
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -17,8 +17,8 @@ from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
     QPalette, QPixmap, QRadialGradient, QTransform)
 from PySide6.QtWidgets import (QAbstractButton, QAbstractItemView, QApplication, QDialog,
     QDialogButtonBox, QGridLayout, QHBoxLayout, QHeaderView,
-    QLabel, QLineEdit, QSizePolicy, QTreeWidget,
-    QTreeWidgetItem, QVBoxLayout, QWidget)
+    QLabel, QLineEdit, QPushButton, QSizePolicy,
+    QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget)
 
 class Ui_Dialog(object):
     def setupUi(self, Dialog):
@@ -30,37 +30,43 @@ class Ui_Dialog(object):
         self.gridLayout.setObjectName(u"gridLayout")
         self.verticalLayout_2 = QWidget(Dialog)
         self.verticalLayout_2.setObjectName(u"verticalLayout_2")
-        sizePolicy = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        sizePolicy = QSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.verticalLayout_2.sizePolicy().hasHeightForWidth())
         self.verticalLayout_2.setSizePolicy(sizePolicy)
         self.verticalLayout2 = QVBoxLayout(self.verticalLayout_2)
         self.verticalLayout2.setObjectName(u"verticalLayout2")
-        self.label = QLabel(self.verticalLayout_2)
-        self.label.setObjectName(u"label")
-        self.label.setWordWrap(True)
+        self.labelUnofficial = QLabel(self.verticalLayout_2)
+        self.labelUnofficial.setObjectName(u"labelUnofficial")
+        self.labelUnofficial.setWordWrap(True)
 
-        self.verticalLayout2.addWidget(self.label)
+        self.verticalLayout2.addWidget(self.labelUnofficial)
 
         self.horizontalLayout = QHBoxLayout()
         self.horizontalLayout.setObjectName(u"horizontalLayout")
+        self.buttonExpandToggle = QPushButton(self.verticalLayout_2)
+        self.buttonExpandToggle.setObjectName(u"buttonExpandToggle")
+
+        self.horizontalLayout.addWidget(self.buttonExpandToggle)
+
+        self.nameFilterEdit = QLineEdit(self.verticalLayout_2)
+        self.nameFilterEdit.setObjectName(u"nameFilterEdit")
+        self.nameFilterEdit.setClearButtonEnabled(True)
+
+        self.horizontalLayout.addWidget(self.nameFilterEdit)
+
         self.labelFilter = QLabel(self.verticalLayout_2)
         self.labelFilter.setObjectName(u"labelFilter")
 
         self.horizontalLayout.addWidget(self.labelFilter)
-
-        self.nameFilterEdit = QLineEdit(self.verticalLayout_2)
-        self.nameFilterEdit.setObjectName(u"nameFilterEdit")
-
-        self.horizontalLayout.addWidget(self.nameFilterEdit)
 
 
         self.verticalLayout2.addLayout(self.horizontalLayout)
 
         self.treeFerts = QTreeWidget(self.verticalLayout_2)
         self.treeFerts.setObjectName(u"treeFerts")
-        sizePolicy1 = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        sizePolicy1 = QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         sizePolicy1.setHorizontalStretch(0)
         sizePolicy1.setVerticalStretch(0)
         sizePolicy1.setHeightForWidth(self.treeFerts.sizePolicy().hasHeightForWidth())
@@ -99,8 +105,12 @@ class Ui_Dialog(object):
 
     def retranslateUi(self, Dialog):
         Dialog.setWindowTitle(QCoreApplication.translate("Dialog", u"Sephrasto - Freie Fertigkeit w\u00e4hlen...", None))
-        self.label.setText(QCoreApplication.translate("Dialog", u"Inoffiziell: Bei den aufgef\u00fchrten Sprachen und Schriften handelt es sich um an WdS orientierte Vorschl\u00e4ge.", None))
-        self.labelFilter.setText(QCoreApplication.translate("Dialog", u"Suchen:", None))
+        self.labelUnofficial.setText(QCoreApplication.translate("Dialog", u"Inoffiziell: Bei den aufgef\u00fchrten Sprachen und Schriften handelt es sich um an WdS orientierte Vorschl\u00e4ge.", None))
+        self.buttonExpandToggle.setText(QCoreApplication.translate("Dialog", u"Expand Toggle", None))
+        self.buttonExpandToggle.setProperty("class", QCoreApplication.translate("Dialog", u"icon", None))
+        self.nameFilterEdit.setPlaceholderText(QCoreApplication.translate("Dialog", u"Suchen...", None))
+        self.labelFilter.setText(QCoreApplication.translate("Dialog", u"Suchen", None))
+        self.labelFilter.setProperty("class", QCoreApplication.translate("Dialog", u"icon", None))
         ___qtreewidgetitem = self.treeFerts.headerItem()
         ___qtreewidgetitem.setText(0, QCoreApplication.translate("Dialog", u"Freie Fertigkeit", None));
     # retranslateUi

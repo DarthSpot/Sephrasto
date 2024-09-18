@@ -7,7 +7,8 @@ import webbrowser
 
 class UpdateChecker:
 
-    _downloadLink = "https://dsaforum.de/app.php/dlext/?view=detail&df_id=213"
+    _apiLink = "https://api.github.com/repos/Aeolitus/Sephrasto/releases/latest"
+    _downloadLink = "https://github.com/Aeolitus/Sephrasto/releases/latest"
     _page = None
 
     @staticmethod
@@ -18,27 +19,27 @@ class UpdateChecker:
         UpdateChecker._page = QtWebEngineCore.QWebEnginePage()
 
         def onTextDownloaded(text):
+            UpdateChecker._page.deleteLater()
             UpdateChecker._page = None
-            res = re.findall("Sephrasto_v(\S*).zip", text)
+            res = re.findall("Sephrasto_(\S*).zip", text)
             if len(res) == 0:
                 return
-
-            version = [int(s) for s in res[0].split(".")]
-
-            while len(version) < 3:
-                version.append(0)
-
-            if Version.isClientLower(version[0], version[1], version[2]):
+            version = Version.fromString(res[0])
+            if not version:
+                return
+            if Version.isClientLower(version):
                 UpdateChecker.showUpdate(res[0])
 
         def loadFinished(ok):
+            UpdateChecker._page.loadFinished.disconnect(loadFinished)
             if ok:
                 UpdateChecker._page.toPlainText(onTextDownloaded)
             else:
+                UpdateChecker._page.deleteLater()
                 UpdateChecker._page = None
 
         UpdateChecker._page.loadFinished.connect(loadFinished)
-        UpdateChecker._page.load(QtCore.QUrl(UpdateChecker._downloadLink))
+        UpdateChecker._page.load(QtCore.QUrl(UpdateChecker._apiLink))
 
     @staticmethod    
     def showUpdate(version):
@@ -48,18 +49,18 @@ class UpdateChecker:
         messageBox = QtWidgets.QMessageBox()
         messageBox.setIcon(QtWidgets.QMessageBox.Information)
         messageBox.setWindowTitle("Neue Sephrasto-Version")
-        messageBox.setText(f"Eine neue Version von Sephrasto ist verfügbar! Clicke auf Download, um zur Sephrasto-Seite auf dsaforum.de zu gelangen.\n\nInstallierte Version: {Version.toString()}\nNeue Version: {version}")
-        messageBox.addButton("Download", QtWidgets.QMessageBox.AcceptRole)
-        messageBox.addButton("Später", QtWidgets.QMessageBox.AcceptRole)
+        messageBox.setText(f"Eine neue Version von Sephrasto ist verfügbar! Clicke auf Download, um zur Sephrasto-Seite auf github.com zu gelangen.\n\nInstallierte Version: {Version.clientToString()}\nNeue Version: {version}")
+        downloadButton = messageBox.addButton("Download", QtWidgets.QMessageBox.AcceptRole)
+        laterButton = messageBox.addButton("Später", QtWidgets.QMessageBox.AcceptRole)
         messageBox.setEscapeButton(QtWidgets.QMessageBox.Close)  
 
         check = QtWidgets.QCheckBox("Information für dieses Update nicht mehr anzeigen.")
         check.setCheckState(QtCore.Qt.Unchecked)
         messageBox.setCheckBox(check)
 
-        result = messageBox.exec()
+        messageBox.exec()
 
-        if result == 0:
+        if messageBox.clickedButton() == downloadButton:
             webbrowser.open(UpdateChecker._downloadLink)
 
         if check.isChecked():

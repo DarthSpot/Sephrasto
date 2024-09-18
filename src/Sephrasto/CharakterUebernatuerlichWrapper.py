@@ -7,13 +7,16 @@ Created on Fri Mar 10 17:33:11 2017
 from Wolke import Wolke
 import UI.CharakterUebernatuerlich
 import CharakterTalentPickerWrapper
-import MousewheelProtector
+from QtUtils.MousewheelProtector import MousewheelProtector
 from PySide6 import QtWidgets, QtCore, QtGui
 from PySide6.QtWidgets import QHeaderView
 import logging
-from CharakterProfaneFertigkeitenWrapper import FertigkeitItemDelegate
+from CharakterProfaneFertigkeitenWrapper import ProfaneFertigkeitenWrapper, FertigkeitItemDelegate
 from Hilfsmethoden import Hilfsmethoden
 from EventBus import EventBus
+from QtUtils.AutoResizingTextBrowser import TextEditAutoResizer
+from functools import partial
+from Hilfsmethoden import SortedCategoryToListDict
 
 class UebernatuerlichWrapper(QtCore.QObject):
     modified = QtCore.Signal()
@@ -25,23 +28,26 @@ class UebernatuerlichWrapper(QtCore.QObject):
         self.ui = UI.CharakterUebernatuerlich.Ui_Form()
         self.ui.setupUi(self.form)
         
+        self.autoResizeHelper = TextEditAutoResizer(self.ui.plainText)
+
         self.model = QtGui.QStandardItemModel(self.ui.listTalente)
         self.ui.listTalente.setModel(self.model)
 
-        self.mwp = MousewheelProtector.MousewheelProtector()
+        self.mwp = MousewheelProtector()
 
         self.ui.splitter.adjustSize()
         width = self.ui.splitter.size().width()
         self.ui.splitter.setSizes([int(width*0.6), int(width*0.4)])
 
         #Signals
+        self.ui.buttonShowAll.setText('\u002b')
+        self.ui.buttonShowAll.clicked.connect(self.showAllTalents)
+
         self.ui.spinFW.valueChanged.connect(lambda: self.fwChanged(False))
         self.ui.tableWidget.currentCellChanged.connect(self.tableClicked)   
         self.ui.tableWidget.cellClicked.connect(self.tableClicked) 
         self.ui.buttonAdd.setStyle(None) # dont know why but the below settings wont do anything without it
         self.ui.buttonAdd.setText('\u002b')
-        self.ui.buttonAdd.setMaximumSize(QtCore.QSize(20, 20))
-        self.ui.buttonAdd.setMinimumSize(QtCore.QSize(20, 20))
         self.ui.buttonAdd.clicked.connect(self.editTalents)
         
         self.availableFerts = []
@@ -65,15 +71,15 @@ class UebernatuerlichWrapper(QtCore.QObject):
         availableTalents = []
         for t in Wolke.DB.talente:
             talent = Wolke.DB.talente[t]
-            if not talent.isSpezialTalent():
+            if not talent.spezialTalent:
                 continue
             if talent.name.endswith("(passiv)") or talent.name.endswith("(Passiv)"):
                 if not " PW " in talent.text:
                     continue
-            if Wolke.Char.voraussetzungenPrüfen(talent.voraussetzungen):
+            if Wolke.Char.voraussetzungenPrüfen(talent):
                 availableTalents.append(talent)
 
-        result = []
+        result = {}
         for el in ferts:
             totalTalentCost = 0
              # going to use the word unique for talents that the char has only one fert for
@@ -83,12 +89,12 @@ class UebernatuerlichWrapper(QtCore.QObject):
                 available = False
                 unique = True
                 owned = False
-                for talFert in talent.fertigkeiten:
-                    if talFert in Wolke.Char.übernatürlicheFertigkeiten:
-                        owned = owned or talent.name in Wolke.Char.übernatürlicheFertigkeiten[talFert].gekaufteTalente
-                    if talFert == el:
+                for fertName in talent.fertigkeiten:
+                    if fertName in Wolke.Char.übernatürlicheFertigkeiten:
+                        owned = owned or talent.name in Wolke.Char.talente
+                    if fertName == el:
                         available = True
-                    elif talFert in ferts:
+                    elif fertName in ferts:
                         unique = False
                 if not available:
                     continue
@@ -100,8 +106,21 @@ class UebernatuerlichWrapper(QtCore.QObject):
 
             if uniqueTalentOwned:
                 continue
-            if totalTalentCost < 120 or (totalTalentCost < 180 and uniqueTalentCost < 60):
-                result.append(el)
+
+            if totalTalentCost == 0:
+                result[el] = """Unter dieser Fertigkeit stehen dir keine Talente zur Verfügung. Du benötigst einen (anderen) Traditionsvorteil.
+Du kannst die Fertigkeit dennoch steigern, aber es wird nicht empfohlen."""
+            elif totalTalentCost < 120 or (totalTalentCost < 180 and uniqueTalentCost < 60):
+                if uniqueTalentCost == 0:
+                    result[el] = """Diese Fertigkeit bietet dir nur wenige Talente, von denen alle über andere Fertigkeiten gewirkt werden können.
+Du kannst die Fertigkeit dennoch steigern, aber es wird nicht empfohlen."""
+                elif totalTalentCost == uniqueTalentCost:
+                    result[el] = """Diese Fertigkeit bietet dir nur wenige Talente. Du kannst die Fertigkeit dennoch steigern, aber es wird nicht empfohlen.
+Das Warnsymbol verschwindet, sobald du ein Talent erwirbst."""
+                else:
+                    result[el] = """Diese Fertigkeit bietet dir nur wenige Talente von denen die meisten über andere Fertigkeiten gewirkt werden können.
+Du kannst die Fertigkeit dennoch steigern, aber es wird nicht empfohlen.
+Das Warnsymbol verschwindet, sobald du ein Talent erwirbst, das nur mit dieser Fertigkeit gewirkt werden kann."""
 
         return result
 
@@ -110,147 +129,178 @@ class UebernatuerlichWrapper(QtCore.QObject):
         
         self.ui.tableWidget.setColumnHidden(0, not Wolke.Char.ueberPDFAnzeigen)
 
-        temp = []
-        for el in Wolke.DB.übernatürlicheFertigkeiten:
-            if not Wolke.Char.voraussetzungenPrüfen(Wolke.DB.übernatürlicheFertigkeiten[el].voraussetzungen):
-                continue
+        kategorienÜbernatürlich = Wolke.DB.einstellungen["Fertigkeiten: Kategorien übernatürlich"].wert.copy()
+        kategorieNonOptimal = 99999
+        kategorienÜbernatürlich["Nicht empfohlen"] = kategorieNonOptimal
 
-            # check if at least one talent is available
-            for tal in Wolke.DB.talente:
-                if el in Wolke.DB.talente[tal].fertigkeiten and Wolke.Char.voraussetzungenPrüfen(Wolke.DB.talente[tal].voraussetzungen):
-                    temp.append(el)
-                    break
+        fertigkeitenByKategorie = SortedCategoryToListDict(kategorienÜbernatürlich)
+        availableFerts = []
+        nonOptimalFerts = self.getNonOptimalFerts(list(Wolke.Char.übernatürlicheFertigkeiten.keys()))
+        for fert in Wolke.Char.übernatürlicheFertigkeiten.values():
+            if fert.name in nonOptimalFerts:
+                fertigkeitenByKategorie.append(kategorieNonOptimal, fert.name)
+            else:
+                fertigkeitenByKategorie.append(fert.kategorie, fert.name)
+            availableFerts.append(fert.name)
+        fertigkeitenByKategorie.sortValues()
 
-        nonOptimalFerts = self.getNonOptimalFerts(temp)
-        def getType(fert, nonOptimalFerts):
-             return Wolke.DB.übernatürlicheFertigkeiten[fert].typ + (99999 if fert in nonOptimalFerts else 0)
-
-        # sort by type, then by name
-        temp.sort(key = lambda x: (getType(x, nonOptimalFerts), x))
-
-        if Hilfsmethoden.ArrayEqual(temp, self.availableFerts):
+        if Hilfsmethoden.ArrayEqual(availableFerts, self.availableFerts):
             for i in range(self.ui.tableWidget.rowCount()):
-                fert = Wolke.Char.übernatürlicheFertigkeiten[self.availableFerts[i]]
+                item = self.ui.tableWidget.cellWidget(i, 1)
+                if item is None or item.property("name") not in Wolke.Char.übernatürlicheFertigkeiten:
+                    continue
+                fert = Wolke.Char.übernatürlicheFertigkeiten[item.property("name")]
                 self.pdfRef[fert.name].setChecked(fert.addToPDF)
-                self.labelRef[fert.name + "KO"].setText(self.getSteigerungskosten(fert))
+                text, tooltip = ProfaneFertigkeitenWrapper.getSteigerungskosten(fert)
+                self.labelRef[fert.name + "KO"].setText(text)
+                self.labelRef[fert.name + "KO"].setToolTip(tooltip)
                 self.labelRef[fert.name + "PW"].setText(str(fert.probenwertTalent))
+                if fert.basiswertMod != 0:
+                    self.labelRef[fert.name + "PW"].setText(str(fert.probenwertTalent + fert.basiswertMod) + "*")
                 self.labelRef[fert.name].setText(str(len(fert.gekaufteTalente)))
-        else:
-            self.availableFerts = temp
+            self.updateInfo()
+            self.updateTalents()    
+            self.currentlyLoading = False
+            return
 
-            rowIndicesWithLinePaint = []
-            count = 0
-            if len(self.availableFerts) > 0:
-                lastType = getType(self.availableFerts[0], nonOptimalFerts)
-                for el in self.availableFerts:
-                    if getType(el, nonOptimalFerts) != lastType:
-                        rowIndicesWithLinePaint.append(count-1)
-                        lastType = getType(el, nonOptimalFerts)
-                    count += 1
+        self.availableFerts = availableFerts
 
-            self.ui.tableWidget.clear()
-            self.rowRef = {}
-            self.spinRef = {}
-            self.labelRef = {}
-            self.layoutRef = {}
-            self.buttonRef = {}
-            self.widgetRef = {}
-            self.pdfRef = {}
-            self.ui.tableWidget.setItemDelegate(FertigkeitItemDelegate(rowIndicesWithLinePaint))
+        rowIndicesWithLinePaint = []
+        count = 0
+        for kategorie, ferts in fertigkeitenByKategorie.items():
+            if len(ferts) == 0:
+                continue
+            count += 1 + len(ferts)
+            rowIndicesWithLinePaint.append(count-1)
+        if len(rowIndicesWithLinePaint) > 0:
+            rowIndicesWithLinePaint.pop()
 
-            self.ui.tableWidget.setRowCount(len(self.availableFerts))
-            self.ui.tableWidget.setColumnCount(6)
-            header = self.ui.tableWidget.horizontalHeader()
-            header.setMinimumSectionSize(0)
-            header.setSectionResizeMode(0, QHeaderView.Fixed)
-            header.setSectionResizeMode(1, QHeaderView.Stretch)
-            header.setSectionResizeMode(2, QHeaderView.Fixed)
-            header.setSectionResizeMode(3, QHeaderView.Fixed)
-            header.setSectionResizeMode(4, QHeaderView.Fixed)
-            header.setSectionResizeMode(5, QHeaderView.Fixed)
-            self.ui.tableWidget.setColumnWidth(0, 40)
-            self.ui.tableWidget.setColumnWidth(2, 60)
-            self.ui.tableWidget.setColumnWidth(3, 80)
-            self.ui.tableWidget.setColumnWidth(4, 65)
-            self.ui.tableWidget.setColumnWidth(5, 90)
+        self.ui.tableWidget.clear()
+        self.rowRef = {}
+        self.spinRef = {}
+        self.labelRef = {}
+        self.layoutRef = {}
+        self.buttonRef = {}
+        self.widgetRef = {}
+        self.pdfRef = {}
+        self.ui.tableWidget.setItemDelegate(FertigkeitItemDelegate(rowIndicesWithLinePaint))
 
-            vheader = self.ui.tableWidget.verticalHeader()
-            vheader.setSectionResizeMode(QHeaderView.Fixed)
-            vheader.setDefaultSectionSize(30);
-            vheader.setMaximumSectionSize(30);
+        self.ui.tableWidget.setRowCount(count)
+        self.ui.tableWidget.setColumnCount(6)
+        header = self.ui.tableWidget.horizontalHeader()
+        header.setMinimumSectionSize(0)
+        header.setSectionResizeMode(0, QHeaderView.Fixed)
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.Fixed)
+        header.setSectionResizeMode(3, QHeaderView.Fixed)
+        header.setSectionResizeMode(4, QHeaderView.Fixed)
+        header.setSectionResizeMode(5, QHeaderView.Fixed)
+        self.ui.tableWidget.setColumnWidth(0, Hilfsmethoden.emToPixels(5))
+        self.ui.tableWidget.setColumnWidth(2, Hilfsmethoden.emToPixels(6))
+        self.ui.tableWidget.setColumnWidth(3, Hilfsmethoden.emToPixels(8.9))
+        self.ui.tableWidget.setColumnWidth(4, Hilfsmethoden.emToPixels(6))
+        self.ui.tableWidget.setColumnWidth(5, Hilfsmethoden.emToPixels(10))
 
-            item = QtWidgets.QTableWidgetItem()
-            item.setText("PDF")
-            item.setToolTip("Fertigkeit in Charakterblatt übernehmen?")
-            self.ui.tableWidget.setHorizontalHeaderItem(0, item)
-            item = QtWidgets.QTableWidgetItem()
-            item.setText("Name")
-            item.setTextAlignment(QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
-            self.ui.tableWidget.setHorizontalHeaderItem(1, item)
-            item = QtWidgets.QTableWidgetItem()
-            item.setTextAlignment(QtCore.Qt.AlignCenter)
-            item.setText("FW")
-            item.setToolTip("Fertigkeitswert")
-            self.ui.tableWidget.setHorizontalHeaderItem(2, item)
-            item = QtWidgets.QTableWidgetItem()
-            item.setTextAlignment(QtCore.Qt.AlignCenter)
-            item.setText("Kosten")
-            self.ui.tableWidget.setHorizontalHeaderItem(3, item)
-            item = QtWidgets.QTableWidgetItem()
-            item.setTextAlignment(QtCore.Qt.AlignCenter)
-            item.setText("PW")
-            item.setToolTip("Probenwert")
-            self.ui.tableWidget.setHorizontalHeaderItem(4, item)
-            item = QtWidgets.QTableWidgetItem()
-            item.setTextAlignment(QtCore.Qt.AlignCenter)
-            item.setText("Talente")
-            self.ui.tableWidget.setHorizontalHeaderItem(5, item)
+        vheader = self.ui.tableWidget.verticalHeader()
+        vheader.setSectionResizeMode(QHeaderView.Fixed)
+        vheader.setDefaultSectionSize(Hilfsmethoden.emToPixels(3.4));
+        vheader.setMaximumSectionSize(Hilfsmethoden.emToPixels(3.4));
+
+        item = QtWidgets.QTableWidgetItem()
+        item.setText("PDF")
+        item.setToolTip("Fertigkeit in Charakterblatt übernehmen?")
+        self.ui.tableWidget.setHorizontalHeaderItem(0, item)
+        item = QtWidgets.QTableWidgetItem()
+        item.setText("Name")
+        item.setTextAlignment(QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
+        self.ui.tableWidget.setHorizontalHeaderItem(1, item)
+        item = QtWidgets.QTableWidgetItem()
+        item.setTextAlignment(QtCore.Qt.AlignCenter)
+        item.setText("FW")
+        item.setToolTip("Fertigkeitswert")
+        self.ui.tableWidget.setHorizontalHeaderItem(2, item)
+        item = QtWidgets.QTableWidgetItem()
+        item.setTextAlignment(QtCore.Qt.AlignCenter)
+        item.setText("Kosten")
+        self.ui.tableWidget.setHorizontalHeaderItem(3, item)
+        item = QtWidgets.QTableWidgetItem()
+        item.setTextAlignment(QtCore.Qt.AlignCenter)
+        item.setText("PW")
+        item.setToolTip("Probenwert")
+        self.ui.tableWidget.setHorizontalHeaderItem(4, item)
+        item = QtWidgets.QTableWidgetItem()
+        item.setTextAlignment(QtCore.Qt.AlignCenter)
+        item.setText("Talente")
+        self.ui.tableWidget.setHorizontalHeaderItem(5, item)
     
-            count = 0
+        count = 0
             
-            font = QtGui.QFont(Wolke.Settings["Font"], Wolke.Settings["FontSize"])
+        fontHeader = QtWidgets.QApplication.instance().font()
+        fontHeader.setBold(True)
+        fontHeader.setCapitalization(QtGui.QFont.SmallCaps)
+        fontHeader.setPointSize(Wolke.FontHeadingSizeL3)
 
-            for el in self.availableFerts:
+        for kategorie, ferts in fertigkeitenByKategorie.items():
+            if len(ferts) == 0:
+                continue
+            tableWidget = QtWidgets.QTableWidgetItem(kategorie)
+            tableWidget.setFont(fontHeader)
+            tableWidget.setFlags(QtCore.Qt.ItemIsEnabled)
+            self.ui.tableWidget.setItem(count, 1, tableWidget)
+            count += 1
+
+            for el in ferts:
                 fert = Wolke.Char.übernatürlicheFertigkeiten[el]
-                fert.aktualisieren(Wolke.Char.attribute)
+                fert.aktualisieren()
 
+                # Add centered checkbox for PDF export
+                self.pdfRef[el + "Widget"] = QtWidgets.QWidget()
                 self.pdfRef[el] = QtWidgets.QCheckBox()
-                self.pdfRef[el].setStyleSheet("margin-left:10; margin-right:10;");
+                cblayout = QtWidgets.QHBoxLayout(self.pdfRef[el + "Widget"])
+                cblayout.addWidget(self.pdfRef[el])
+                cblayout.setAlignment(QtCore.Qt.AlignCenter)
+                cblayout.setContentsMargins(Hilfsmethoden.emToPixels(1), 0, 0, 0)
                 self.pdfRef[el].setChecked(fert.addToPDF)
-                self.pdfRef[el].stateChanged.connect(lambda state, name=el: self.addToPDFClicked(name, state))
-                self.ui.tableWidget.setCellWidget(count,0,self.pdfRef[el])
+                self.pdfRef[el].stateChanged.connect(partial(self.addToPDFClicked, fert=el))
+                self.ui.tableWidget.setCellWidget(count,0,self.pdfRef[el + "Widget"])
 
+                # Add label for name
                 if el in nonOptimalFerts:
                     self.labelRef[el + "Name"] =  QtWidgets.QLabel("<span style='" + Wolke.FontAwesomeCSS + "'>\uf071</span>&nbsp;&nbsp;" + el)
-                    self.labelRef[el + "Name"].setToolTip("""Diese Fertigkeit bietet dir nur wenige Talente von denen (meistens) alle über andere Fertigkeiten gewirkt werden können.
-Du kannst die Fertigkeit dennoch steigern, aber es wird nicht empfohlen.
-Das Warnsymbol verschwindet, sobald du ein Talent erwirbst, das nur mit dieser Fertigkeit gewirkt werden kann.""")
+                    self.labelRef[el + "Name"].setToolTip(nonOptimalFerts[el])
                 else:
                     self.labelRef[el + "Name"] =  QtWidgets.QLabel(el)
                 self.labelRef[el + "Name"].setContentsMargins(3, 0, 0, 0)
+                self.labelRef[el + "Name"].setProperty("name", el)
                 self.ui.tableWidget.setCellWidget(count, 1, self.labelRef[el + "Name"])
-                # Add Spinner for FW
+
+                # Add spinner for FW
                 self.spinRef[el] = QtWidgets.QSpinBox()
                 self.spinRef[el].setFocusPolicy(QtCore.Qt.StrongFocus)
                 self.spinRef[el].installEventFilter(self.mwp)
+                self.spinRef[el].setKeyboardTracking(False)
                 self.spinRef[el].setMinimum(0)
                 self.spinRef[el].setMaximum(fert.maxWert)
                 self.spinRef[el].setValue(fert.wert)
                 self.spinRef[el].setAlignment(QtCore.Qt.AlignCenter)
                 self.spinRef[el].setButtonSymbols(QtWidgets.QAbstractSpinBox.PlusMinus)
-                self.spinRef[el].valueChanged.connect(lambda qtNeedsThis=False, name=el: self.spinnerClicked(name))
+                self.spinRef[el].valueChanged.connect(partial(self.spinnerClicked, fert=el))
                 self.ui.tableWidget.setCellWidget(count,2,self.spinRef[el])
                 
                 # Add Kosten
                 self.labelRef[el + "KO"] = QtWidgets.QLabel()
-                self.labelRef[el + "KO"].setStyleSheet("margin-left:10; margin-right:10;");
-                self.labelRef[el + "KO"].setText(self.getSteigerungskosten(fert))
-                self.labelRef[el + "KO"].setAlignment(QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
+                self.labelRef[el + "KO"].setStyleSheet("width: 100%;");
+                text, tooltip = ProfaneFertigkeitenWrapper.getSteigerungskosten(fert)
+                self.labelRef[el + "KO"].setText(text)
+                self.labelRef[el + "KO"].setToolTip(tooltip)
+                self.labelRef[el + "KO"].setAlignment(QtCore.Qt.AlignCenter|QtCore.Qt.AlignVCenter)
                 self.ui.tableWidget.setCellWidget(count,3,self.labelRef[el + "KO"])
 
                 # Add PW
                 self.labelRef[el + "PW"] = QtWidgets.QLabel()
                 self.labelRef[el + "PW"].setText(str(fert.probenwertTalent))
+                if fert.basiswertMod != 0:
+                    self.labelRef[fert.name + "PW"].setText(str(fert.probenwertTalent + fert.basiswertMod) + "*")
                 self.labelRef[el + "PW"].setAlignment(QtCore.Qt.AlignCenter)
                 self.ui.tableWidget.setCellWidget(count,4,self.labelRef[el + "PW"])
 
@@ -262,11 +312,9 @@ Das Warnsymbol verschwindet, sobald du ein Talent erwirbst, das nur mit dieser F
                 self.labelRef[el].setAlignment(QtCore.Qt.AlignCenter)
                 self.layoutRef[el].addWidget(self.labelRef[el])
                 self.buttonRef[el] = QtWidgets.QPushButton()
-                self.buttonRef[el].setProperty("class", "icon")
+                self.buttonRef[el].setProperty("class", "iconSmall")
                 self.buttonRef[el].setText('\u002b')
-                self.buttonRef[el].setMaximumSize(QtCore.QSize(20, 20))
-                self.buttonRef[el].setMinimumSize(QtCore.QSize(20, 20))
-                self.buttonRef[el].clicked.connect(lambda qtNeedsThis=False, name=el: self.addClicked(name))
+                self.buttonRef[el].clicked.connect(partial(self.addClicked, fert=el))
                 self.layoutRef[el].addWidget(self.buttonRef[el])
                 self.widgetRef[el] = QtWidgets.QWidget()
                 self.widgetRef[el].setLayout(self.layoutRef[el])
@@ -280,14 +328,10 @@ Das Warnsymbol verschwindet, sobald du ein Talent erwirbst, das nur mit dieser F
         
     def tableClicked(self):
         if not self.currentlyLoading:
-            tmp = self.availableFerts[self.ui.tableWidget.currentRow()]
-            if tmp in Wolke.Char.übernatürlicheFertigkeiten:    
-                self.currentFertName = tmp
+            item = self.ui.tableWidget.cellWidget(self.ui.tableWidget.currentRow(), 1)
+            if item is not None and item.property("name") in Wolke.Char.übernatürlicheFertigkeiten:  
+                self.currentFertName = item.property("name")
                 self.updateInfo()
-        
-    def getSteigerungskosten(self, fert):
-        ep = (fert.wert+1) * fert.steigerungsfaktor
-        return "&nbsp;&nbsp;<span style='" + Wolke.FontAwesomeCSS + "'>\uf176</span>&nbsp;&nbsp;" + str(ep) + " EP"
 
     def fwChanged(self, flag = False):
         if self.currentlyLoading:
@@ -300,25 +344,29 @@ Das Warnsymbol verschwindet, sobald du ein Talent erwirbst, das nur mit dieser F
             val = self.ui.spinFW.value()
         fert = Wolke.Char.übernatürlicheFertigkeiten[self.currentFertName]
         fert.wert = val
-        fert.aktualisieren(Wolke.Char.attribute)
-        self.ui.spinPW.setValue(fert.probenwertTalent)
+        fert.aktualisieren()
+        self.ui.spinPW.setValue(fert.probenwertTalent + fert.basiswertMod)
         if flag:
             self.ui.spinFW.setValue(val)
         else:
             self.spinRef[fert.name].setValue(val)
-
-        self.labelRef[fert.name + "KO"].setText(self.getSteigerungskosten(fert))
+        
+        text, tooltip = ProfaneFertigkeitenWrapper.getSteigerungskosten(fert)
+        self.labelRef[fert.name + "KO"].setText(text)
+        self.labelRef[fert.name + "KO"].setToolTip(tooltip)
         self.labelRef[fert.name + "PW"].setText(str(fert.probenwertTalent))
+        if fert.basiswertMod != 0:
+            self.labelRef[fert.name + "PW"].setText(str(fert.probenwertTalent + fert.basiswertMod) + "*")
 
         self.updateAddToPDF()
 
         self.modified.emit()
     
-    def addToPDFClicked(self, fert, state):
-        Wolke.Char.übernatürlicheFertigkeiten[fert].addToPDF = state
+    def addToPDFClicked(self, state, fert):
+        Wolke.Char.übernatürlicheFertigkeiten[fert].addToPDF = state == QtCore.Qt.Checked.value
         self.modified.emit()
 
-    def spinnerClicked(self, fert):
+    def spinnerClicked(self, value, fert):
         if not self.currentlyLoading:
             self.currentFertName = fert
             self.updateInfo()
@@ -347,21 +395,17 @@ Das Warnsymbol verschwindet, sobald du ein Talent erwirbst, das nur mit dieser F
             return
         self.currentlyLoading = True
         fert = Wolke.Char.übernatürlicheFertigkeiten[self.currentFertName]
-        fert.aktualisieren(Wolke.Char.attribute)
+        fert.aktualisieren()
         self.ui.labelFertigkeit.setText(self.currentFertName)
-        self.ui.labelAttribute.setText(fert.attribute[0] + "/" 
-                                            + fert.attribute[1] + "/" 
-                                            + fert.attribute[2])
+        self.ui.labelAttribute.setText("/".join(fert.attribute))
         self.ui.spinSF.setValue(fert.steigerungsfaktor)
-        self.ui.spinBasis.setValue(fert.basiswert)
+        self.ui.spinBasis.setValue(fert.basiswert + fert.basiswertMod)
         self.ui.spinFW.setMaximum(fert.maxWert)
         self.spinRef[self.currentFertName].setMaximum(fert.maxWert)
         self.ui.spinFW.setValue(fert.wert)
-        self.ui.spinPW.setValue(fert.probenwertTalent)
-        self.ui.plainText.setPlainText("")
-        self.ui.plainText.appendHtml(Hilfsmethoden.fixHtml(fert.text))
-        fertigkeitTypen = Wolke.DB.einstellungen["Fertigkeiten: Typen übernatürlich"].toTextList()
-        self.ui.labelKategorie.setText(fertigkeitTypen[min(fert.typ, len(fertigkeitTypen)-1)])
+        self.ui.spinPW.setValue(fert.probenwertTalent + fert.basiswertMod)
+        self.ui.plainText.setText(Hilfsmethoden.fixHtml(fert.text))
+        self.ui.labelKategorie.setText(fert.kategorieName(Wolke.DB))
         self.updateTalents()
         self.currentlyLoading = False
         
@@ -371,11 +415,7 @@ Das Warnsymbol verschwindet, sobald du ein Talent erwirbst, das nur mit dieser F
         self.model.clear()
         fert = Wolke.Char.übernatürlicheFertigkeiten[self.currentFertName]
         for el in fert.gekaufteTalente:
-            talStr = Wolke.DB.talente[el].getFullName(Wolke.Char).replace(self.currentFertName + ": ", "")
-            costStr = ""
-            if not el in Wolke.Char.talenteVariableKosten:
-                costStr = " (" + str(Wolke.Char.getTalentCost(el, fert.steigerungsfaktor)) + " EP)"
-            item = QtGui.QStandardItem(talStr + costStr)
+            item = QtGui.QStandardItem(Wolke.Char.talente[el].anzeigenameExt)
             item.setEditable(False)
             item.setSelectable(False)
             self.model.appendRow(item)
@@ -384,6 +424,14 @@ Das Warnsymbol verschwindet, sobald du ein Talent erwirbst, das nur mit dieser F
             self.ui.listTalente.contentsMargins().bottom() +\
             self.ui.listTalente.spacing())
         
+    def showAllTalents(self):
+        pickerClass = EventBus.applyFilter("class_talentpicker_wrapper", CharakterTalentPickerWrapper.TalentPicker)
+        tal = pickerClass(None, True)
+        self.updateAddToPDF()
+        if tal.gekaufteTalente is not None:
+            self.modified.emit()
+            self.load()
+
     def editTalents(self):
         if self.currentFertName == "":
             return
